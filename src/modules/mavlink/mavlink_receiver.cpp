@@ -135,7 +135,11 @@ MavlinkReceiver::~MavlinkReceiver()
 void
 MavlinkReceiver::handle_message(mavlink_message_t *msg)
 {
-	switch (msg->msgid) {
+
+	/* Debug message */
+	printf("DEBUG: mavlink message received\n");
+
+        switch (msg->msgid) {
 	case MAVLINK_MSG_ID_COMMAND_LONG:
 		handle_message_command_long(msg);
 		break;
@@ -153,6 +157,7 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 		break;
 
 	case MAVLINK_MSG_ID_VICON_POSITION_ESTIMATE:
+		printf("DEBUG: vicon message recieved\n");
 		handle_message_vicon_position_estimate(msg);
 		break;
 
@@ -1344,7 +1349,6 @@ MavlinkReceiver::receive_thread(void *arg)
 
 	while (!_mavlink->_task_should_exit) {
 		if (poll(fds, 1, timeout) > 0) {
-
 			/* non-blocking read. read may return negative values */
 			if ((nread = read(uart_fd, buf, sizeof(buf))) < (ssize_t)sizeof(buf)) {
 				/* to avoid reading very small chunks wait for data before reading */
@@ -1353,7 +1357,7 @@ MavlinkReceiver::receive_thread(void *arg)
 
 			/* if read failed, this loop won't execute */
 			for (ssize_t i = 0; i < nread; i++) {
-				if (mavlink_parse_char(_mavlink->get_channel(), buf[i], &msg, &status)) {
+				if (mavlink_parse_char(_mavlink->get_channel(), buf[i], &msg, &status)) {	
 					/* handle generic messages and commands */
 					handle_message(&msg);
 

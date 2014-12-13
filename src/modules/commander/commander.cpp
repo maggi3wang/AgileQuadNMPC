@@ -711,6 +711,7 @@ bool handle_command(struct vehicle_status_s *status_local, const struct safety_s
 
 int commander_thread_main(int argc, char *argv[])
 {
+
 	/* not yet initialized */
 	commander_initialized = false;
 

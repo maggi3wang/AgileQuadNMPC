@@ -1619,6 +1619,7 @@ int Mavlink::start_helper(int argc, char *argv[])
 int
 Mavlink::start(int argc, char *argv[])
 {
+	
 	// Wait for the instance count to go up one
 	// before returning to the shell
 	int ic = Mavlink::instance_count();
