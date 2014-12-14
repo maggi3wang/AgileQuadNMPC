@@ -137,7 +137,7 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 {
 
 	/* Debug message */
-	printf("DEBUG: mavlink message received\n");
+	//printf("DEBUG: mavlink message received\n");
 
         switch (msg->msgid) {
 	case MAVLINK_MSG_ID_COMMAND_LONG:
@@ -157,7 +157,7 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 		break;
 
 	case MAVLINK_MSG_ID_VICON_POSITION_ESTIMATE:
-		printf("DEBUG: vicon message recieved\n");
+		//printf("DEBUG: vicon message recieved\n");
 		handle_message_vicon_position_estimate(msg);
 		break;
 
@@ -474,12 +474,16 @@ MavlinkReceiver::handle_message_vicon_position_estimate(mavlink_message_t *msg)
 	memset(&vicon_position, 0, sizeof(vicon_position));
 
 	vicon_position.timestamp = hrt_absolute_time();
+    vicon_position.valid = true;
 	vicon_position.x = pos.x;
 	vicon_position.y = pos.y;
 	vicon_position.z = pos.z;
 	vicon_position.roll = pos.roll;
 	vicon_position.pitch = pos.pitch;
 	vicon_position.yaw = pos.yaw;
+    
+    /* Debug message */
+	//printf("DEBUG: vicon x = %d\n", (int)(pos.x*1000));
 
 	if (_vicon_position_pub < 0) {
 		_vicon_position_pub = orb_advertise(ORB_ID(vehicle_vicon_position), &vicon_position);

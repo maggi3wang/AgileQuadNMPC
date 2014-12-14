@@ -61,6 +61,7 @@
 #include <uORB/topics/vehicle_control_mode.h>
 #include <uORB/topics/vehicle_gps_position.h>
 #include <uORB/topics/vehicle_global_position.h>
+#include <uORB/topics/vehicle_vicon_position.h>
 #include <uORB/topics/parameter_update.h>
 #include <drivers/drv_hrt.h>
 
@@ -228,10 +229,16 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
 	memset(&att, 0, sizeof(att));
 	struct vehicle_control_mode_s control_mode;
 	memset(&control_mode, 0, sizeof(control_mode));
+    struct vehicle_vicon_position_s vicon_pos;  // Added by Ross Allen
+    memset(&vicon_pos, 0, sizeof(vicon_pos));
 
 	uint64_t last_data = 0;
 	uint64_t last_measurement = 0;
 	uint64_t last_vel_t = 0;
+    
+    /* Vicon parameters - Added by Ross Allen */
+    bool vicon_valid = false;
+    static const hrt_abstime vicon_topic_timeout = 250000;		// vicon topic timeout = 0.25s
 
 	/* current velocity */
 	math::Vector<3> vel;
@@ -262,6 +269,9 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
 
 	/* subscribe to control mode*/
 	int sub_control_mode = orb_subscribe(ORB_ID(vehicle_control_mode));
+    
+    /* subscribe to vicon position */
+    int vehicle_vicon_position_sub = orb_subscribe(ORB_ID(vehicle_vicon_position)); // Added by Ross Allen
 
 	/* advertise attitude */
 	orb_advert_t pub_att = orb_advertise(ORB_ID(vehicle_attitude), &att);
@@ -307,6 +317,10 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
 		fds[1].fd = sub_params;
 		fds[1].events = POLLIN;
 		int ret = poll(fds, 2, 1000);
+        
+        /* Added by Ross Allen */
+        hrt_abstime t = hrt_absolute_time();
+        bool updated;
 
 		if (ret < 0) {
 			/* XXX this is seriously bad - should be an emergency */
@@ -525,6 +539,20 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
 						printf("[attitude estimator ekf] sensor data missed! (%llu)\n", raw.timestamp - last_data);
 
 					last_data = raw.timestamp;
+                    
+                    /* Check Vicon for attitude data and timeout*/
+                    /* Added by Ross Allen */
+                    orb_check(vehicle_vicon_position_sub, &updated);
+
+                    if (updated) {
+                        orb_copy(ORB_ID(vehicle_vicon_position), vehicle_vicon_position_sub, &vicon_pos);
+                        vicon_valid = vicon_pos.valid;
+                    }
+                    
+                    if (vicon_valid && (t > (vicon_pos.timestamp + vicon_topic_timeout))) {
+                        vicon_valid = false;
+                        warnx("VICON timeout");
+                    }
 
 					/* send out */
 					att.timestamp = raw.timestamp;
@@ -532,6 +560,12 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
 					att.roll = euler[0];
 					att.pitch = euler[1];
 					att.yaw = euler[2] + mag_decl;
+                    
+                    /* Use vicon yaw if valid and just overwrite*/
+                    /* Added by Ross Allen */
+                    if(vicon_valid){
+                        att.yaw = vicon_pos.yaw;
+                    }
 
 					att.rollspeed = x_aposteriori[0];
 					att.pitchspeed = x_aposteriori[1];

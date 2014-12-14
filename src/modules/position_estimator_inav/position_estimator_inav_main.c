@@ -60,6 +60,7 @@
 #include <uORB/topics/vehicle_global_position.h>
 #include <uORB/topics/vehicle_gps_position.h>
 #include <uORB/topics/vision_position_estimate.h>
+#include <uORB/topics/vehicle_vicon_position.h>
 #include <uORB/topics/home_position.h>
 #include <uORB/topics/optical_flow.h>
 #include <mavlink/mavlink_log.h>
@@ -89,6 +90,7 @@ static const hrt_abstime sonar_valid_timeout = 1000000;	// estimate sonar distan
 static const hrt_abstime xy_src_timeout = 2000000;	// estimate position during this time after position sources loss
 static const uint32_t updates_counter_len = 1000000;
 static const float max_flow = 1.0f;	// max flow value that can be used, rad/s
+static const hrt_abstime vicon_topic_timeout = 250000;		// vicon topic timeout = 0.25s
 
 __EXPORT int position_estimator_inav_main(int argc, char *argv[]);
 
@@ -307,6 +309,7 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 	bool flow_valid = false;		// flow is valid
 	bool flow_accurate = false;		// flow should be accurate (this flag not updated if flow_valid == false)
 	bool vision_valid = false;
+    bool vicon_valid = false;
 
 	/* declare and safely initialize all structs */
 	struct actuator_controls_s actuator;
@@ -329,6 +332,8 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 	memset(&vision, 0, sizeof(vision));
 	struct vehicle_global_position_s global_pos;
 	memset(&global_pos, 0, sizeof(global_pos));
+    struct vehicle_vicon_position_s vicon_pos;  // Added by Ross Allen
+    memset(&vicon_pos, 0, sizeof(vicon_pos));
 
 	/* subscribe */
 	int parameter_update_sub = orb_subscribe(ORB_ID(parameter_update));
@@ -340,6 +345,7 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 	int vehicle_gps_position_sub = orb_subscribe(ORB_ID(vehicle_gps_position));
 	int vision_position_estimate_sub = orb_subscribe(ORB_ID(vision_position_estimate));
 	int home_position_sub = orb_subscribe(ORB_ID(home_position));
+    int vehicle_vicon_position_sub = orb_subscribe(ORB_ID(vehicle_vicon_position)); // Added by Ross Allen
 
 	/* advertise */
 	orb_advert_t vehicle_local_position_pub = orb_advertise(ORB_ID(vehicle_local_position), &local_pos);
@@ -777,6 +783,15 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 
 				gps_updates++;
 			}
+            
+            /* vehicle vicon position */
+            /* Added by Ross Allen */
+			orb_check(vehicle_vicon_position_sub, &updated);
+
+			if (updated) {
+				orb_copy(ORB_ID(vehicle_vicon_position), vehicle_vicon_position_sub, &vicon_pos);
+                vicon_valid = vicon_pos.valid;
+            }
 		}
 
 		/* check for timeout on FLOW topic */
@@ -806,6 +821,14 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 			corr_sonar = 0.0f;
 			sonar_valid = false;
 		}
+        
+        /* check for timeout on vicon topic */
+        /* Added by Ross ALlen */
+		if (vicon_valid && (t > (vicon_pos.timestamp + vicon_topic_timeout))) {
+			vicon_valid = false;
+			warnx("VICON timeout");
+			mavlink_log_info(mavlink_fd, "[inav] VICON timeout");
+		}
 
 		float dt = t_prev > 0 ? (t - t_prev) / 1000000.0f : 0.0f;
 		dt = fmaxf(fminf(0.02, dt), 0.002);		// constrain dt from 2 to 20 ms
@@ -827,8 +850,10 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 		bool use_vision_z = vision_valid && params.w_z_vision_p > MIN_VALID_W;
 		/* use flow if it's valid and (accurate or no GPS available) */
 		bool use_flow = flow_valid && (flow_accurate || !use_gps_xy);
+        /* use vicon if it is valid */
+        bool use_vicon = vicon_valid;
 
-		bool can_estimate_xy = (eph < max_eph_epv) || use_gps_xy || use_flow || use_vision_xy;
+		bool can_estimate_xy = (eph < max_eph_epv) || use_gps_xy || use_flow || use_vision_xy || use_vicon;
 
 		bool dist_bottom_valid = (t < sonar_valid_time + sonar_valid_timeout);
 
@@ -1020,6 +1045,12 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 					inertial_filter_correct(corr_vision[1][1], dt, y_est, 1, w_xy_vision_v);
 				}
 			}
+            
+            /* if vicon in use, assume maximum confidence in estimation*/
+            /* Added by Ross Allen */
+            if (use_vicon) {
+                eph = min_eph_epv;
+            }
 
 			if (!(isfinite(x_est[0]) && isfinite(x_est[1]) && isfinite(y_est[0]) && isfinite(y_est[1]))) {
 				write_debug_log("BAD ESTIMATE AFTER CORRECTION", dt, x_est, y_est, z_est, x_est_prev, y_est_prev, z_est_prev, acc, corr_gps, w_xy_gps_p, w_xy_gps_v);
@@ -1038,6 +1069,14 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 			inertial_filter_correct(-x_est[1], dt, x_est, 1, params.w_xy_res_v);
 			inertial_filter_correct(-y_est[1], dt, y_est, 1, params.w_xy_res_v);
 		}
+        
+        /* Overwrite position estimate with VICON data if available */
+        /* Added by Ross Allen */
+        if(vicon_valid){
+            x_est[0] = vicon_pos.x;
+            y_est[0] = vicon_pos.y;
+            z_est[0] = vicon_pos.z;
+        }
 
 		/* detect land */
 		alt_avg += (- z_est[0] - alt_avg) * dt / params.land_t;
