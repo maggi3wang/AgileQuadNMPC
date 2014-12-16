@@ -108,6 +108,17 @@ PARAM_DEFINE_FLOAT(INAV_W_XY_GPS_P, 1.0f);
 PARAM_DEFINE_FLOAT(INAV_W_XY_GPS_V, 2.0f);
 
 /**
+ * XYZ axis weight for vicon position
+ *
+ * Weight (cutoff frequency) for vicon position measurements.
+ *
+ * @min 0.0
+ * @max 10.0
+ * @group Position Estimator INAV
+ */
+PARAM_DEFINE_FLOAT(INAV_W_VICON_P, 10.0f);
+
+/**
  * XY axis weight for vision position
  *
  * Weight (cutoff frequency) for vision position measurements.
@@ -291,6 +302,7 @@ int parameters_init(struct position_estimator_inav_param_handles *h)
 	h->w_xy_res_v = param_find("INAV_W_XY_RES_V");
 	h->w_gps_flow = param_find("INAV_W_GPS_FLOW");
 	h->w_acc_bias = param_find("INAV_W_ACC_BIAS");
+    h->w_vicon_p = param_find("INAV_W_VICON_P");    // Ross Allen
 	h->flow_k = param_find("INAV_FLOW_K");
 	h->flow_q_min = param_find("INAV_FLOW_Q_MIN");
 	h->sonar_filt = param_find("INAV_SONAR_FILT");
@@ -318,6 +330,7 @@ int parameters_update(const struct position_estimator_inav_param_handles *h, str
 	param_get(h->w_xy_res_v, &(p->w_xy_res_v));
 	param_get(h->w_gps_flow, &(p->w_gps_flow));
 	param_get(h->w_acc_bias, &(p->w_acc_bias));
+    param_get(h->w_vicon_p, &(p->w_vicon_p));   // Ross Allen
 	param_get(h->flow_k, &(p->flow_k));
 	param_get(h->flow_q_min, &(p->flow_q_min));
 	param_get(h->sonar_filt, &(p->sonar_filt));

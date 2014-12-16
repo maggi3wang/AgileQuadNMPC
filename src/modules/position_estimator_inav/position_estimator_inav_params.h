@@ -54,6 +54,7 @@ struct position_estimator_inav_params {
 	float w_xy_res_v;
 	float w_gps_flow;
 	float w_acc_bias;
+    float w_vicon_p;    // Ross Allen
 	float flow_k;
 	float flow_q_min;
 	float sonar_filt;
@@ -78,6 +79,7 @@ struct position_estimator_inav_param_handles {
 	param_t w_xy_res_v;
 	param_t w_gps_flow;
 	param_t w_acc_bias;
+    param_t w_vicon_p;  // Ross Allen
 	param_t flow_k;
 	param_t flow_q_min;
 	param_t sonar_filt;

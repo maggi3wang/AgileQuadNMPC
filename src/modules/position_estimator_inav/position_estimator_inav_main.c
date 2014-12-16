@@ -90,7 +90,7 @@ static const hrt_abstime sonar_valid_timeout = 1000000;	// estimate sonar distan
 static const hrt_abstime xy_src_timeout = 2000000;	// estimate position during this time after position sources loss
 static const uint32_t updates_counter_len = 1000000;
 static const float max_flow = 1.0f;	// max flow value that can be used, rad/s
-static const hrt_abstime vicon_topic_timeout = 250000;		// vicon topic timeout = 0.25s
+static const hrt_abstime vicon_topic_timeout = 500000;		// vicon topic timeout = 0.25s
 
 __EXPORT int position_estimator_inav_main(int argc, char *argv[]);
 
@@ -239,6 +239,10 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 
 	float eph_vision = 0.5f;
 	float epv_vision = 0.5f;
+    
+    /* Added by Ross Allen - Unsure of values */
+    float eph_vicon = 0.01f;
+	float epv_vicon = 0.01f;
 
 	float x_est_prev[2], y_est_prev[2], z_est_prev[2];
 	memset(x_est_prev, 0, sizeof(x_est_prev));
@@ -267,6 +271,7 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 	uint16_t accel_updates = 0;
 	uint16_t baro_updates = 0;
 	uint16_t gps_updates = 0;
+    uint16_t vicon_updates = 0; // Added by Ross Allen
 	uint16_t attitude_updates = 0;
 	uint16_t flow_updates = 0;
 
@@ -292,6 +297,8 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 		{ 0.0f, 0.0f },		// E (pos, vel)
 		{ 0.0f, 0.0f },		// D (pos, vel)
 	};
+    
+    float corr_vicon[] = { 0.0f, 0.0f, 0.0f };	// N E D
 	
 	float corr_sonar = 0.0f;
 	float corr_sonar_filtered = 0.0f;
@@ -746,6 +753,7 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 						}
 
 						/* calculate index of estimated values in buffer */
+                        /** RA Notes: I think this accounts for lag in GPS data */
 						int est_i = buf_ptr - 1 - min(EST_BUF_SIZE - 1, max(0, (int)(params.delay_gps * 1000000.0f / PUB_INTERVAL)));
 						if (est_i < 0) {
 							est_i += EST_BUF_SIZE;
@@ -790,7 +798,56 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 
 			if (updated) {
 				orb_copy(ORB_ID(vehicle_vicon_position), vehicle_vicon_position_sub, &vicon_pos);
+                
+                /* reset estimate if first update since invalid vicon */
+                bool reset_est = false;
+                if(!vicon_valid) {
+                    reset_est = true;
+                }
                 vicon_valid = vicon_pos.valid;
+
+				if (vicon_valid) {
+                    
+                    /* reset position estimate when vicon becomes good */
+                    if (reset_est) {
+                        x_est[0] = vicon_pos.x;
+                        //x_est[1] = vicon_vel.x;
+                        y_est[0] = vicon_pos.y;
+                        //y_est[1] = vicon_vel.y;
+                        z_est[0] = vicon_pos.z;
+                        //z_est[1] = vicon_vel.z;
+                    }
+
+
+                    /* calculate correction for position */
+                    corr_vicon[0] = vicon_pos.x - x_est[0];
+                    corr_vicon[1] = vicon_pos.y - y_est[0];
+                    corr_vicon[2] = vicon_pos.z - z_est[0];
+                    //~ corr_vicon[0][1] = 0.0f;
+                    //~ corr_vicon[1][1] = 0.0f;
+                    //~ corr_vicon[2][1] = 0.0f;
+
+                    //~ /* calculate correction for velocity */
+                    //~ if (vicon_vel_valid) {
+                        //~ corr_vicon[0][1] = vicon_vel.x - x_est[1];
+                        //~ corr_vicon[1][1] = vicon_vel.y - y_est[1];
+                        //~ corr_vicon[2][1] = vicon_vel.z - z_est[1];
+//~ 
+                    //~ } else {
+                        //~ corr_vicon[0][1] = 0.0f;
+                        //~ corr_vicon[1][1] = 0.0f;
+                        //~ corr_vicon[2][1] = 0.0f;
+                    //~ }
+
+                    //w_vicon = min_eph_epv / fmaxf(min_eph_epv, eph_vicon);
+
+				} else {
+					/* no vicon lock */
+					memset(corr_vicon, 0, sizeof(corr_vicon));
+					ref_init_start = 0;
+				}
+
+				vicon_updates++;
             }
 		}
 
@@ -851,7 +908,7 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 		/* use flow if it's valid and (accurate or no GPS available) */
 		bool use_flow = flow_valid && (flow_accurate || !use_gps_xy);
         /* use vicon if it is valid */
-        bool use_vicon = vicon_valid;
+        bool use_vicon = vicon_valid && params.w_vicon_p > MIN_VALID_W;
 
 		bool can_estimate_xy = (eph < max_eph_epv) || use_gps_xy || use_flow || use_vision_xy || use_vicon;
 
@@ -875,6 +932,9 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 		float w_xy_vision_p = params.w_xy_vision_p;
 		float w_xy_vision_v = params.w_xy_vision_v;
 		float w_z_vision_p = params.w_z_vision_p;
+        
+        float w_vicon_p = params.w_vicon_p;   //Added by Ross Allen
+        //~ float w_vicon_v = params.w_vicon_v * w_vicon;   //Added by Ross Allen
 
 		/* reduce GPS weight if optical flow is good */
 		if (use_flow && flow_accurate) {
@@ -888,6 +948,13 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 			baro_offset += offs_corr;
 			corr_baro += offs_corr;
 		}
+        
+        /* baro offset correction with vicon - Ross Allen */
+        if (use_vicon) {
+            float offs_corr_vicon = corr_vicon[2] * w_vicon_p * dt;
+            baro_offset += offs_corr_vicon;
+            corr_baro += offs_corr_vicon;
+        }
 
 		/* accelerometer bias correction for GPS (use buffered rotation matrix) */
 		float accel_bias_corr[3] = { 0.0f, 0.0f, 0.0f };
@@ -909,6 +976,33 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 
 			for (int j = 0; j < 3; j++) {
 				c += R_gps[j][i] * accel_bias_corr[j];
+			}
+
+			if (isfinite(c)) {
+				acc_bias[i] += c * params.w_acc_bias * dt;
+			}
+		}
+        
+        /* accelerometer bias correction for VICON */
+		accel_bias_corr[0] = 0.0f;
+		accel_bias_corr[1] = 0.0f;
+		accel_bias_corr[2] = 0.0f;
+
+		if (use_vicon) {
+			accel_bias_corr[0] -= corr_vicon[0] * w_vicon_p * w_vicon_p;
+			//~ accel_bias_corr[0] -= corr_vicon[0][1] * w_vicon_v;
+			accel_bias_corr[1] -= corr_vicon[1] * w_vicon_p * w_vicon_p;
+			//~ accel_bias_corr[1] -= corr_vicon[1][1] * w_vicon_v;
+            accel_bias_corr[2] -= corr_vicon[2] * w_vicon_p * w_vicon_p;
+            //~ accel_bias_corr[2] -= corr_vicon[2][1] * w_vicon_v;
+		}
+
+		/* transform error vector from NED frame to body frame */
+		for (int i = 0; i < 3; i++) {
+			float c = 0.0f;
+
+			for (int j = 0; j < 3; j++) {
+				c += att.R[j][i] * accel_bias_corr[j];
 			}
 
 			if (isfinite(c)) {
@@ -979,23 +1073,33 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 		}
 
 		/* inertial filter correction for altitude */
-		inertial_filter_correct(corr_baro, dt, z_est, 0, params.w_z_baro);
+        if (use_vicon) {
+			epv = fminf(epv, epv_vicon);
 
-		if (use_gps_z) {
-			epv = fminf(epv, gps.epv);
+			inertial_filter_correct(corr_vicon[2], dt, z_est, 0, w_vicon_p);
+            
+		} else {
+            
+            inertial_filter_correct(corr_baro, dt, z_est, 0, params.w_z_baro);
 
-			inertial_filter_correct(corr_gps[2][0], dt, z_est, 0, w_z_gps_p);
-		}
+            if (use_gps_z) {
+                epv = fminf(epv, gps.epv);
 
-		if (use_vision_z) {
-			epv = fminf(epv, epv_vision);
-			inertial_filter_correct(corr_vision[2][0], dt, z_est, 0, w_z_vision_p);
-		}
+                inertial_filter_correct(corr_gps[2][0], dt, z_est, 0, w_z_gps_p);
+            }
+
+            if (use_vision_z) {
+                epv = fminf(epv, epv_vision);
+                
+                inertial_filter_correct(corr_vision[2][0], dt, z_est, 0, w_z_vision_p);
+            }
+        }
 
 		if (!(isfinite(z_est[0]) && isfinite(z_est[1]))) {
 			write_debug_log("BAD ESTIMATE AFTER Z CORRECTION", dt, x_est, y_est, z_est, x_est_prev, y_est_prev, z_est_prev, acc, corr_gps, w_xy_gps_p, w_xy_gps_v);
 			memcpy(z_est, z_est_prev, sizeof(z_est));
 			memset(corr_gps, 0, sizeof(corr_gps));
+            memset(corr_vicon, 0, sizeof(corr_vicon));
 			memset(corr_vision, 0, sizeof(corr_vision));
 			corr_baro = 0;
 
@@ -1013,50 +1117,57 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 				memcpy(x_est, x_est_prev, sizeof(x_est));
 				memcpy(y_est, y_est_prev, sizeof(y_est));
 			}
-
-			/* inertial filter correction for position */
-			if (use_flow) {
-				eph = fminf(eph, eph_flow);
-
-				inertial_filter_correct(corr_flow[0], dt, x_est, 1, params.w_xy_flow * w_flow);
-				inertial_filter_correct(corr_flow[1], dt, y_est, 1, params.w_xy_flow * w_flow);
-			}
-
-			if (use_gps_xy) {
-				eph = fminf(eph, gps.eph);
-
-				inertial_filter_correct(corr_gps[0][0], dt, x_est, 0, w_xy_gps_p);
-				inertial_filter_correct(corr_gps[1][0], dt, y_est, 0, w_xy_gps_p);
-
-				if (gps.vel_ned_valid && t < gps.timestamp_velocity + gps_topic_timeout) {
-					inertial_filter_correct(corr_gps[0][1], dt, x_est, 1, w_xy_gps_v);
-					inertial_filter_correct(corr_gps[1][1], dt, y_est, 1, w_xy_gps_v);
-				}
-			}
-
-			if (use_vision_xy) {
-				eph = fminf(eph, eph_vision);
-
-				inertial_filter_correct(corr_vision[0][0], dt, x_est, 0, w_xy_vision_p);
-				inertial_filter_correct(corr_vision[1][0], dt, y_est, 0, w_xy_vision_p);
-
-				if (w_xy_vision_v > MIN_VALID_W) {
-					inertial_filter_correct(corr_vision[0][1], dt, x_est, 1, w_xy_vision_v);
-					inertial_filter_correct(corr_vision[1][1], dt, y_est, 1, w_xy_vision_v);
-				}
-			}
             
-            /* if vicon in use, assume maximum confidence in estimation*/
             /* Added by Ross Allen */
             if (use_vicon) {
-                eph = min_eph_epv;
+                //eph = min_eph_epv;    //if vicon in use, assume maximum confidence in estimation
+                eph = fminf(eph, eph_vicon);
+
+				inertial_filter_correct(corr_vicon[0], dt, x_est, 0, w_vicon_p);
+				inertial_filter_correct(corr_vicon[1], dt, y_est, 0, w_vicon_p);
+
+            } else { 
+
+                /* inertial filter correction for position */
+                if (use_flow) {
+                    eph = fminf(eph, eph_flow);
+
+                    inertial_filter_correct(corr_flow[0], dt, x_est, 1, params.w_xy_flow * w_flow);
+                    inertial_filter_correct(corr_flow[1], dt, y_est, 1, params.w_xy_flow * w_flow);
+                }
+
+                if (use_gps_xy) {
+                    eph = fminf(eph, gps.eph);
+
+                    inertial_filter_correct(corr_gps[0][0], dt, x_est, 0, w_xy_gps_p);
+                    inertial_filter_correct(corr_gps[1][0], dt, y_est, 0, w_xy_gps_p);
+
+                    if (gps.vel_ned_valid && t < gps.timestamp_velocity + gps_topic_timeout) {
+                        inertial_filter_correct(corr_gps[0][1], dt, x_est, 1, w_xy_gps_v);
+                        inertial_filter_correct(corr_gps[1][1], dt, y_est, 1, w_xy_gps_v);
+                    }
+                }
+
+                if (use_vision_xy) {
+                    eph = fminf(eph, eph_vision);
+
+                    inertial_filter_correct(corr_vision[0][0], dt, x_est, 0, w_xy_vision_p);
+                    inertial_filter_correct(corr_vision[1][0], dt, y_est, 0, w_xy_vision_p);
+
+                    if (w_xy_vision_v > MIN_VALID_W) {
+                        inertial_filter_correct(corr_vision[0][1], dt, x_est, 1, w_xy_vision_v);
+                        inertial_filter_correct(corr_vision[1][1], dt, y_est, 1, w_xy_vision_v);
+                    }
+                }
             }
+            
 
 			if (!(isfinite(x_est[0]) && isfinite(x_est[1]) && isfinite(y_est[0]) && isfinite(y_est[1]))) {
 				write_debug_log("BAD ESTIMATE AFTER CORRECTION", dt, x_est, y_est, z_est, x_est_prev, y_est_prev, z_est_prev, acc, corr_gps, w_xy_gps_p, w_xy_gps_v);
 				memcpy(x_est, x_est_prev, sizeof(x_est));
 				memcpy(y_est, y_est_prev, sizeof(y_est));
 				memset(corr_gps, 0, sizeof(corr_gps));
+                memset(corr_vicon, 0, sizeof(corr_vicon));
 				memset(corr_vision, 0, sizeof(corr_vision));
 				memset(corr_flow, 0, sizeof(corr_flow));
 
@@ -1072,11 +1183,13 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
         
         /* Overwrite position estimate with VICON data if available */
         /* Added by Ross Allen */
+        /**
         if(vicon_valid){
             x_est[0] = vicon_pos.x;
             y_est[0] = vicon_pos.y;
             z_est[0] = vicon_pos.z;
         }
+        * */
 
 		/* detect land */
 		alt_avg += (- z_est[0] - alt_avg) * dt / params.land_t;
@@ -1117,16 +1230,18 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 			if (t > updates_counter_start + updates_counter_len) {
 				float updates_dt = (t - updates_counter_start) * 0.000001f;
 				warnx(
-					"updates rate: accelerometer = %.1f/s, baro = %.1f/s, gps = %.1f/s, attitude = %.1f/s, flow = %.1f/s",
+					"updates rate: accelerometer = %.1f/s, baro = %.1f/s, gps = %.1f/s, vicon = %.1f/s, attitude = %.1f/s, flow = %.1f/s",
 					(double)(accel_updates / updates_dt),
 					(double)(baro_updates / updates_dt),
 					(double)(gps_updates / updates_dt),
+                    (double)(vicon_updates / updates_dt),
 					(double)(attitude_updates / updates_dt),
 					(double)(flow_updates / updates_dt));
 				updates_counter_start = t;
 				accel_updates = 0;
 				baro_updates = 0;
 				gps_updates = 0;
+                vicon_updates = 0;
 				attitude_updates = 0;
 				flow_updates = 0;
 			}

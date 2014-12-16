@@ -238,7 +238,7 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
     
     /* Vicon parameters - Added by Ross Allen */
     bool vicon_valid = false;
-    static const hrt_abstime vicon_topic_timeout = 250000;		// vicon topic timeout = 0.25s
+    static const hrt_abstime vicon_topic_timeout = 500000;		// vicon topic timeout = 0.25s
 
 	/* current velocity */
 	math::Vector<3> vel;
