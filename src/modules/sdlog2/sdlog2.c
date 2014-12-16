@@ -1142,6 +1142,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 		if (status_updated) {
 			log_msg.msg_type = LOG_STAT_MSG;
 			log_msg.body.log_STAT.main_state = (uint8_t) buf_status.main_state;
+            log_msg.body.log_STAT.nav_state = (uint8_t) buf_status.nav_state;
 			log_msg.body.log_STAT.arming_state = (uint8_t) buf_status.arming_state;
 			log_msg.body.log_STAT.failsafe_state = (uint8_t) buf_status.failsafe;
 			log_msg.body.log_STAT.battery_remaining = buf_status.battery_remaining;
