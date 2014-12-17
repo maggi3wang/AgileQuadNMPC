@@ -299,6 +299,7 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 	};
     
     float corr_vicon[] = { 0.0f, 0.0f, 0.0f };	// N E D
+    float w_vicon = 1.0f;
 	
 	float corr_sonar = 0.0f;
 	float corr_sonar_filtered = 0.0f;
@@ -804,6 +805,8 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
                 if(!vicon_valid) {
                     reset_est = true;
                 }
+                
+                w_vicon = params.w_vicon_p;
                 vicon_valid = vicon_pos.valid;
 
 				if (vicon_valid) {
@@ -823,23 +826,6 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
                     corr_vicon[0] = vicon_pos.x - x_est[0];
                     corr_vicon[1] = vicon_pos.y - y_est[0];
                     corr_vicon[2] = vicon_pos.z - z_est[0];
-                    //~ corr_vicon[0][1] = 0.0f;
-                    //~ corr_vicon[1][1] = 0.0f;
-                    //~ corr_vicon[2][1] = 0.0f;
-
-                    //~ /* calculate correction for velocity */
-                    //~ if (vicon_vel_valid) {
-                        //~ corr_vicon[0][1] = vicon_vel.x - x_est[1];
-                        //~ corr_vicon[1][1] = vicon_vel.y - y_est[1];
-                        //~ corr_vicon[2][1] = vicon_vel.z - z_est[1];
-//~ 
-                    //~ } else {
-                        //~ corr_vicon[0][1] = 0.0f;
-                        //~ corr_vicon[1][1] = 0.0f;
-                        //~ corr_vicon[2][1] = 0.0f;
-                    //~ }
-
-                    //w_vicon = min_eph_epv / fmaxf(min_eph_epv, eph_vicon);
 
 				} else {
 					/* no vicon lock */
@@ -848,6 +834,11 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 				}
 
 				vicon_updates++;
+                
+            } else {
+                
+                /* reduce weight if not updated */
+                w_vicon = w_vicon*0.5f;
             }
 		}
 
@@ -933,7 +924,8 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 		float w_xy_vision_v = params.w_xy_vision_v;
 		float w_z_vision_p = params.w_z_vision_p;
         
-        float w_vicon_p = params.w_vicon_p;   //Added by Ross Allen
+        float w_vicon_p = w_vicon;   //Added by Ross Allen
+        //~ float w_vicon_p = params.w_vicon_p;   //Added by Ross Allen
         //~ float w_vicon_v = params.w_vicon_v * w_vicon;   //Added by Ross Allen
 
 		/* reduce GPS weight if optical flow is good */
