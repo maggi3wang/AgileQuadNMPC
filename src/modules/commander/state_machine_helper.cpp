@@ -285,6 +285,14 @@ main_state_transition(struct vehicle_status_s *status, main_state_t new_main_sta
 			ret = TRANSITION_CHANGED;
 		}
 		break;
+        
+    case MAIN_STATE_ASL_TRAJCTL:
+		/* need local position and vicon */
+		if (status->condition_local_position_valid && 
+            status->condition_vicon_position_valid) {
+			ret = TRANSITION_CHANGED;
+		}
+		break;
 
 	case MAIN_STATE_AUTO_LOITER:
 		/* need global position estimate */
@@ -296,8 +304,7 @@ main_state_transition(struct vehicle_status_s *status, main_state_t new_main_sta
 	case MAIN_STATE_AUTO_MISSION:
 	case MAIN_STATE_AUTO_RTL:
 		/* need global position and home position */
-		if ((status->condition_global_position_valid || 
-            (status->condition_local_position_valid && status->condition_vicon_position_valid)) && 
+		if (status->condition_global_position_valid && 
             status->condition_home_position_valid) {
 			ret = TRANSITION_CHANGED;
 		}
@@ -496,6 +503,11 @@ bool set_nav_state(struct vehicle_status_s *status, const bool data_link_loss_en
 			}
 		}
 		break;
+        
+    case MAIN_STATE_ASL_TRAJCTL:
+        /* TODO - fill in appropriate failsafes */
+        status->nav_state = NAVIGATION_STATE_ASL_TRAJCTL;
+        break;
 
 	case MAIN_STATE_AUTO_MISSION:
 		/* go into failsafe

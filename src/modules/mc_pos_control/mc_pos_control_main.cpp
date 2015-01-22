@@ -240,6 +240,12 @@ private:
 					const math::Vector<3> line_a, const math::Vector<3> line_b, math::Vector<3>& res);
 
 	/**
+     * Set position setpoint using trajectory control - Ross Allen
+     */
+    void        control_trajectory(float dt);
+    
+    
+    /**
 	 * Set position setpoint for AUTO
 	 */
 	void		control_auto(float dt);
@@ -715,6 +721,17 @@ MulticopterPositionControl::cross_sphere_line(const math::Vector<3>& sphere_c, f
 	}
 }
 
+/* Added by Ross Allen */
+void
+MulticopterPositionControl::control_trajectory(float dt)
+{
+    /* Just force a static setpoint for now */
+    _pos_sp(0) = 1.6283f;
+	_pos_sp(1) = 2.0630f;
+	_pos_sp(2) = -0.3f;
+    _att_sp.yaw_body = -1.68f;
+}
+
 void
 MulticopterPositionControl::control_auto(float dt)
 {
@@ -963,6 +980,11 @@ MulticopterPositionControl::task_main()
 				/* offboard control */
 				control_offboard(dt);
 				_mode_auto = false;
+                
+            } else if (_control_mode.flag_control_trajectory_enabled) {
+                /* trajectory control - Ross Allen */
+                control_trajectory(dt);
+                _mode_auto = false;
 
 			} else {
 				/* AUTO */

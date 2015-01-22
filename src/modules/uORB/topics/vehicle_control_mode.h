@@ -75,6 +75,7 @@ struct vehicle_control_mode_s {
 	bool flag_control_manual_enabled;		/**< true if manual input is mixed in */
 	bool flag_control_auto_enabled;			/**< true if onboard autopilot should act */
 	bool flag_control_offboard_enabled;		/**< true if offboard control should be used */
+    bool flag_control_trajectory_enabled;   /**< true if trajectory control should be used - Ross Allen of ASL */
 	bool flag_control_rates_enabled;		/**< true if rates are stabilized */
 	bool flag_control_attitude_enabled;		/**< true if attitude stabilization is mixed in */
 	bool flag_control_force_enabled;		/**< true if force control is mixed in */

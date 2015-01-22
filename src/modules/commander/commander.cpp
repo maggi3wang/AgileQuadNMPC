@@ -751,6 +751,7 @@ int commander_thread_main(int argc, char *argv[])
 	main_states_str[MAIN_STATE_AUTO_RTL]			= "AUTO_RTL";
 	main_states_str[MAIN_STATE_ACRO]			= "ACRO";
 	main_states_str[MAIN_STATE_OFFBOARD]			= "OFFBOARD";
+    main_states_str[MAIN_STATE_ASL_TRAJCTL]     = "ASL_TRAJCTL";
 
 	const char *arming_states_str[ARMING_STATE_MAX];
 	arming_states_str[ARMING_STATE_INIT]			= "INIT";
@@ -774,6 +775,7 @@ int commander_thread_main(int argc, char *argv[])
 	nav_states_str[NAVIGATION_STATE_DESCEND]		= "DESCEND";
 	nav_states_str[NAVIGATION_STATE_TERMINATION]		= "TERMINATION";
 	nav_states_str[NAVIGATION_STATE_OFFBOARD]		= "OFFBOARD";
+    nav_states_str[NAVIGATION_STATE_ASL_TRAJCTL]    = "ASL_TRAJCTL";
 
 	/* pthread for slow low prio thread */
 	pthread_t commander_low_prio_thread;
@@ -2208,20 +2210,35 @@ set_main_state_rc(struct vehicle_status_s *status_local, struct manual_control_s
 			print_reject_mode(status_local, "AUTO_LOITER");
 
 		} else {
-			res = main_state_transition(status_local, MAIN_STATE_AUTO_MISSION);
+            
+            /* transition to trajctl if inside and valid, transition to auto mission if outside  - Ross Allen*/
+            if (status_local->condition_vicon_position_valid) {
+                
+                res = main_state_transition(status_local, MAIN_STATE_ASL_TRAJCTL);
+                
+                if (res != TRANSITION_DENIED) {
+                    break;	// changed successfully or already in this state
+                }
 
-			if (res != TRANSITION_DENIED) {
-				break;	// changed successfully or already in this state
-			}
+                print_reject_mode(status_local, "ASL_TRAJCTL");
+                
+            } else {
+                
+                res = main_state_transition(status_local, MAIN_STATE_AUTO_MISSION);
 
-			print_reject_mode(status_local, "AUTO_MISSION");
+                if (res != TRANSITION_DENIED) {
+                    break;	// changed successfully or already in this state
+                }
 
-			// fallback to LOITER if home position not set
-			res = main_state_transition(status_local, MAIN_STATE_AUTO_LOITER);
+                print_reject_mode(status_local, "AUTO_MISSION");
 
-			if (res != TRANSITION_DENIED) {
-				break;  // changed successfully or already in this state
-			}
+                // fallback to LOITER if home position not set
+                res = main_state_transition(status_local, MAIN_STATE_AUTO_LOITER);
+
+                if (res != TRANSITION_DENIED) {
+                    break;  // changed successfully or already in this state
+                }
+            }
 		}
 
 		// fallback to POSCTL
@@ -2259,6 +2276,7 @@ set_control_mode()
 	control_mode.flag_external_manual_override_ok = !status.is_rotary_wing;
 	control_mode.flag_system_hil_enabled = status.hil_state == HIL_STATE_ON;
 	control_mode.flag_control_offboard_enabled = false;
+    control_mode.flag_control_trajectory_enabled = false;
 
 	switch (status.nav_state) {
 	case NAVIGATION_STATE_MANUAL:
@@ -2270,6 +2288,19 @@ set_control_mode()
 		control_mode.flag_control_climb_rate_enabled = false;
 		control_mode.flag_control_position_enabled = false;
 		control_mode.flag_control_velocity_enabled = false;
+		control_mode.flag_control_termination_enabled = false;
+		break;
+        
+    case NAVIGATION_STATE_ASL_TRAJCTL:
+        control_mode.flag_control_trajectory_enabled = true;
+        control_mode.flag_control_manual_enabled = false;
+		control_mode.flag_control_auto_enabled = true;
+		control_mode.flag_control_rates_enabled = true;
+		control_mode.flag_control_attitude_enabled = true;
+		control_mode.flag_control_altitude_enabled = true;
+		control_mode.flag_control_climb_rate_enabled = true;
+		control_mode.flag_control_position_enabled = true;
+		control_mode.flag_control_velocity_enabled = true;
 		control_mode.flag_control_termination_enabled = false;
 		break;
 
