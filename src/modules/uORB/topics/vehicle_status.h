@@ -71,6 +71,7 @@ typedef enum {
 	MAIN_STATE_AUTO_RTL,
 	MAIN_STATE_ACRO,
 	MAIN_STATE_OFFBOARD,
+    MAIN_STATE_ASL_TRAJCTL,
 	MAIN_STATE_MAX
 } main_state_t;
 
@@ -111,6 +112,7 @@ typedef enum {
 	NAVIGATION_STATE_DESCEND,			/**< Descend mode (no position control) */
 	NAVIGATION_STATE_TERMINATION,		/**< Termination mode */
 	NAVIGATION_STATE_OFFBOARD,
+    NAVIGATION_STATE_ASL_TRAJCTL,       /**< Trajectory control mode implemented by autonomous systems lab */
 	NAVIGATION_STATE_MAX,
 } navigation_state_t;
 
