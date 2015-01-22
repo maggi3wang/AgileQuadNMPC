@@ -69,6 +69,7 @@
 #include <uORB/topics/home_position.h>
 #include <uORB/topics/vehicle_global_position.h>
 #include <uORB/topics/vehicle_local_position.h>
+#include <uORB/topics/vehicle_vicon_position.h>
 #include <uORB/topics/position_setpoint_triplet.h>
 #include <uORB/topics/vehicle_gps_position.h>
 #include <uORB/topics/vehicle_command.h>
@@ -127,12 +128,18 @@ extern struct system_load_s system_load;
 #define STICK_ON_OFF_COUNTER_LIMIT (STICK_ON_OFF_HYSTERESIS_TIME_MS*COMMANDER_MONITORING_LOOPSPERMSEC)
 
 #define POSITION_TIMEOUT		(2 * 1000 * 1000)	/**< consider the local or global position estimate invalid after 600ms */
+#define VICON_POSITION_TIMEOUT 250000               /**< vicon invalid after 0.25s - NOTE a different timer is used in position_estimator_inav*/
 #define FAILSAFE_DEFAULT_TIMEOUT	(3 * 1000 * 1000)	/**< hysteresis time - the failsafe will trigger after 3 seconds in this state */
 #define OFFBOARD_TIMEOUT		500000
 #define DIFFPRESS_TIMEOUT		2000000
 
 #define PRINT_INTERVAL	5000000
 #define PRINT_MODE_REJECT_INTERVAL	2000000
+
+/* Vicon home position */
+#define HOME_VICON_LAT 37.426798f
+#define HOME_VICON_LON -122.173221f
+#define HOME_VICON_ALT 0.0f
 
 enum MAV_MODE_FLAG {
 	MAV_MODE_FLAG_CUSTOM_MODE_ENABLED = 1, /* 0b00000001 Reserved for future use. | */
@@ -951,6 +958,11 @@ int commander_thread_main(int argc, char *argv[])
 	int local_position_sub = orb_subscribe(ORB_ID(vehicle_local_position));
 	struct vehicle_local_position_s local_position;
 	memset(&local_position, 0, sizeof(local_position));
+    
+    /* Subscribe to vicon position data - Ross Allen */
+    int vicon_position_sub = orb_subscribe(ORB_ID(vehicle_vicon_position));
+    struct vehicle_vicon_position_s vicon_position;
+	memset(&vicon_position, 0, sizeof(vicon_position));
 
 	/*
 	 * The home position is set based on GPS only, to prevent a dependency between
@@ -1293,7 +1305,35 @@ int commander_thread_main(int argc, char *argv[])
 			/* mark home position as set */
 			status.condition_home_position_valid = true;
 			tune_positive(true);
-		}
+		
+        } else if(!status.condition_home_position_valid && status.condition_local_position_valid &&
+                    status.condition_vicon_position_valid && !armed.armed) {
+                        
+            /* update home if vicon is being used - Ross Allen */
+            
+            home.lat = HOME_VICON_LAT;
+            home.lon = HOME_VICON_LON;
+            home.alt = HOME_VICON_ALT;
+            
+            home.x = local_position.x;
+			home.y = local_position.y;
+			home.z = local_position.z;
+
+			warnx("home: lat = %.7f, lon = %.7f, alt = %.2f ", home.lat, home.lon, (double)home.alt);
+			mavlink_log_info(mavlink_fd, "[cmd] home: %.7f, %.7f, %.2f", home.lat, home.lon, (double)home.alt);
+
+			/* announce new home position */
+			if (home_pub > 0) {
+				orb_publish(ORB_ID(home_position), home_pub, &home);
+
+			} else {
+				home_pub = orb_advertise(ORB_ID(home_position), &home);
+			}
+
+			/* mark home position as set */
+			status.condition_home_position_valid = true;
+			tune_positive(true);
+        }                    
 
 		/* update condition_local_position_valid and condition_local_altitude_valid */
 		/* hysteresis for EPH */
@@ -1506,6 +1546,16 @@ int commander_thread_main(int argc, char *argv[])
 				mavlink_log_critical(mavlink_fd, "gps fix lost");
 			}
 		}
+        
+        /* Check for vicon data to be used for home position - Ross Allen */
+        orb_check(vicon_position_sub, &updated);
+        
+        if (updated) {
+            orb_copy(ORB_ID(vehicle_vicon_position), vicon_position_sub, &vicon_position);
+        }
+        
+        check_valid(vicon_position.timestamp, VICON_POSITION_TIMEOUT, vicon_position.valid,
+			    &(status.condition_vicon_position_valid), &status_changed);
 
 		/* start mission result check */
 		orb_check(mission_result_sub, &updated);
@@ -1827,7 +1877,33 @@ int commander_thread_main(int argc, char *argv[])
 
 				/* mark home position as set */
 				status.condition_home_position_valid = true;
-			}
+                
+			} else if (armed.armed && !was_armed && hrt_absolute_time() > start_time + 2000000 && 
+                        status.condition_local_position_valid && status.condition_vicon_position_valid) {
+            
+                // TODO remove code duplication
+				home.lat = HOME_VICON_LAT;
+				home.lon = HOME_VICON_LON;
+				home.alt = HOME_VICON_ALT;
+
+				home.x = local_position.x;
+				home.y = local_position.y;
+				home.z = local_position.z;
+
+				warnx("home: lat = %.7f, lon = %.7f, alt = %.2f ", home.lat, home.lon, (double)home.alt);
+				mavlink_log_info(mavlink_fd, "home: %.7f, %.7f, %.2f", home.lat, home.lon, (double)home.alt);
+
+				/* announce new home position */
+				if (home_pub > 0) {
+					orb_publish(ORB_ID(home_position), home_pub, &home);
+
+				} else {
+					home_pub = orb_advertise(ORB_ID(home_position), &home);
+				}
+
+				/* mark home position as set */
+				status.condition_home_position_valid = true;
+            }
 
 			arming_state_changed = false;
 		}
