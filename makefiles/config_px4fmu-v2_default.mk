@@ -129,11 +129,6 @@ MODULES		+= lib/conversion
 MODULES		+= lib/launchdetection
 
 #
-# OBC challenge
-#
-MODULES		+= modules/bottle_drop
-
-#
 # Demo apps
 #
 #MODULES		+= examples/math_demo
