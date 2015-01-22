@@ -44,7 +44,6 @@
 #include <math.h>
 #include <mathlib/mathlib.h>
 #include <mavlink/mavlink_log.h>
-#include <fw_pos_control_l1/landingslope.h>
 #include <systemlib/err.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -75,10 +74,7 @@ bool MissionFeasibilityChecker::checkMissionFeasible(bool isRotarywing, dm_item_
 	}
 
 
-	if (isRotarywing)
-		return checkMissionFeasibleRotarywing(dm_current, nMissionItems, geofence, home_alt);
-	else
-		return checkMissionFeasibleFixedwing(dm_current, nMissionItems, geofence, home_alt);
+	return checkMissionFeasibleRotarywing(dm_current, nMissionItems, geofence, home_alt);
 }
 
 bool MissionFeasibilityChecker::checkMissionFeasibleRotarywing(dm_item_t dm_current, size_t nMissionItems, Geofence &geofence, float home_alt)
@@ -90,21 +86,6 @@ bool MissionFeasibilityChecker::checkMissionFeasibleRotarywing(dm_item_t dm_curr
 
 	/* Mission is only marked as feasible if all checks return true */
 	return (resGeofence && resHomeAltitude);
-}
-
-bool MissionFeasibilityChecker::checkMissionFeasibleFixedwing(dm_item_t dm_current, size_t nMissionItems, Geofence &geofence, float home_alt)
-{
-	/* Update fixed wing navigation capabilites */
-	updateNavigationCapabilities();
-//	warnx("_nav_caps.landing_slope_angle_rad %.4f, _nav_caps.landing_horizontal_slope_displacement %.4f", _nav_caps.landing_slope_angle_rad, _nav_caps.landing_horizontal_slope_displacement);
-
-	/* Perform checks and issue feedback to the user for all checks */
-	bool resLanding = checkFixedWingLanding(dm_current, nMissionItems);
-	bool resGeofence = checkGeofence(dm_current, nMissionItems, geofence);
-	bool resHomeAltitude = checkHomePositionAltitude(dm_current, nMissionItems, home_alt);
-
-	/* Mission is only marked as feasible if all checks return true */
-	return (resLanding && resGeofence && resHomeAltitude);
 }
 
 bool MissionFeasibilityChecker::checkGeofence(dm_item_t dm_current, size_t nMissionItems, Geofence &geofence)
@@ -160,74 +141,6 @@ bool MissionFeasibilityChecker::checkHomePositionAltitude(dm_item_t dm_current, 
 		}
 	}
 
-	return true;
-}
-
-bool MissionFeasibilityChecker::checkFixedWingLanding(dm_item_t dm_current, size_t nMissionItems)
-{
-	/* Go through all mission items and search for a landing waypoint
-	 * if landing waypoint is found: the previous waypoint is checked to be at a feasible distance and altitude given the landing slope */
-
-
-	for (size_t i = 0; i < nMissionItems; i++) {
-		struct mission_item_s missionitem;
-		const ssize_t len = sizeof(missionitem);
-		if (dm_read(dm_current, i, &missionitem, len) != len) {
-			/* not supposed to happen unless the datamanager can't access the SD card, etc. */
-			return false;
-		}
-
-		if (missionitem.nav_cmd == NAV_CMD_LAND) {
-			struct mission_item_s missionitem_previous;
-			if (i != 0) {
-				if (dm_read(dm_current, i-1, &missionitem_previous, len) != len) {
-					/* not supposed to happen unless the datamanager can't access the SD card, etc. */
-					return false;
-				}
-
-				float wp_distance = get_distance_to_next_waypoint(missionitem_previous.lat , missionitem_previous.lon, missionitem.lat, missionitem.lon);
-				float slope_alt_req = Landingslope::getLandingSlopeAbsoluteAltitude(wp_distance, missionitem.altitude, _nav_caps.landing_horizontal_slope_displacement, _nav_caps.landing_slope_angle_rad);
-				float wp_distance_req = Landingslope::getLandingSlopeWPDistance(missionitem_previous.altitude, missionitem.altitude, _nav_caps.landing_horizontal_slope_displacement, _nav_caps.landing_slope_angle_rad);
-				float delta_altitude = missionitem.altitude - missionitem_previous.altitude;
-//				warnx("wp_distance %.2f, delta_altitude %.2f, missionitem_previous.altitude %.2f, missionitem.altitude %.2f, slope_alt_req %.2f, wp_distance_req %.2f",
-//						wp_distance, delta_altitude, missionitem_previous.altitude, missionitem.altitude, slope_alt_req, wp_distance_req);
-//				warnx("_nav_caps.landing_horizontal_slope_displacement %.4f, _nav_caps.landing_slope_angle_rad %.4f, _nav_caps.landing_flare_length %.4f",
-//						_nav_caps.landing_horizontal_slope_displacement, _nav_caps.landing_slope_angle_rad, _nav_caps.landing_flare_length);
-
-				if (wp_distance > _nav_caps.landing_flare_length) {
-					/* Last wp is before flare region */
-
-					if (delta_altitude < 0) {
-						if (missionitem_previous.altitude <= slope_alt_req) {
-							/* Landing waypoint is at or below altitude of slope at the given waypoint distance: this is ok, aircraft will intersect the slope */
-							return true;
-						} else {
-							/* Landing waypoint is above altitude of slope at the given waypoint distance */
-							mavlink_log_info(_mavlink_fd, "#audio: Landing: last waypoint too high/too close");
-							mavlink_log_info(_mavlink_fd, "Move down to %.1fm or move further away by %.1fm",
-									(double)(slope_alt_req),
-									(double)(wp_distance_req - wp_distance));
-							return false;
-						}
-					} else {
-						/* Landing waypoint is above last waypoint */
-						mavlink_log_info(_mavlink_fd, "#audio: Landing waypoint above last nav waypoint");
-						return false;
-					}
-				} else {
-					/* Last wp is in flare region */
-					//xxx give recommendations
-					mavlink_log_info(_mavlink_fd, "#audio: Warning: Landing: last waypoint in flare region");
-					return false;
-				}
-			} else {
-				mavlink_log_info(_mavlink_fd, "#audio: Warning: starting with land waypoint");
-				return false;
-			}
-		}
-	}
-
-	/* No landing waypoints or no waypoints */
 	return true;
 }
 

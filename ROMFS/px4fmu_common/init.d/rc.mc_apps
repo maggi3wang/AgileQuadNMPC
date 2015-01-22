@@ -5,7 +5,6 @@
 #
 
 attitude_estimator_ekf start
-#ekf_att_pos_estimator start
 position_estimator_inav start
 
 mc_att_control start

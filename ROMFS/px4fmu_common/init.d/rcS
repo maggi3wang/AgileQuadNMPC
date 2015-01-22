@@ -481,37 +481,6 @@ then
 	fi
 
 	#
-	# Fixed wing setup
-	#
-	if [ $VEHICLE_TYPE == fw ]
-	then
-		echo "[init] Vehicle type: FIXED WING"
-
-		if [ $MIXER == none ]
-		then
-			# Set default mixer for fixed wing if not defined
-			set MIXER FMU_AERT
-		fi
-
-		if [ $MAV_TYPE == none ]
-		then
-			# Use MAV_TYPE = 1 (fixed wing) if not defined
-			set MAV_TYPE 1
-		fi
-
-		param set MAV_TYPE $MAV_TYPE
-
-		# Load mixer and configure outputs
-		sh /etc/init.d/rc.interface
-
-		# Start standard fixedwing apps
-		if [ $LOAD_DEFAULT_APPS == yes ]
-		then
-			sh /etc/init.d/rc.fw_apps
-		fi
-	fi
-
-	#
 	# Multicopters setup
 	#
 	if [ $VEHICLE_TYPE == mc ]

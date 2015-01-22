@@ -82,7 +82,6 @@ MODULES		+= modules/uavcan
 #
 MODULES		+= modules/attitude_estimator_ekf
 MODULES		+= modules/attitude_estimator_so3
-MODULES		+= modules/ekf_att_pos_estimator
 MODULES		+= modules/position_estimator_inav
 MODULES		+= examples/flow_position_estimator
 
@@ -90,8 +89,6 @@ MODULES		+= examples/flow_position_estimator
 # Vehicle Control
 #
 #MODULES		+= modules/segway # XXX Needs GCC 4.7 fix
-MODULES		+= modules/fw_pos_control_l1
-MODULES		+= modules/fw_att_control
 MODULES		+= modules/mc_att_control
 MODULES		+= modules/mc_pos_control
 
@@ -143,10 +140,6 @@ MODULES		+= examples/px4_simple_app
 # Tutorial code from
 # https://pixhawk.ethz.ch/px4/dev/debug_values
 #MODULES		+= examples/px4_mavlink_debug
-
-# Tutorial code from
-# https://pixhawk.ethz.ch/px4/dev/example_fixedwing_control
-#MODULES			+= examples/fixedwing_control
 
 # Hardware test
 #MODULES			+= examples/hwtest

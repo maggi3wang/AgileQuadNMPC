@@ -270,8 +270,7 @@ main_state_transition(struct vehicle_status_s *status, main_state_t new_main_sta
 		break;
 
 	case MAIN_STATE_ALTCTL:
-		/* need at minimum altitude estimate */
-		/* TODO: add this for fixedwing as well */
+		/* need at minimum altitude estimate */	
 		if (!status->is_rotary_wing ||
 		    (status->condition_local_altitude_valid ||
 		     status->condition_global_position_valid)) {
