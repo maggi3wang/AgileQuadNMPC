@@ -728,7 +728,7 @@ MulticopterPositionControl::control_trajectory(float dt)
     /* Just force a static setpoint for now */
     _pos_sp(0) = 1.6283f;
 	_pos_sp(1) = 2.0630f;
-	_pos_sp(2) = -0.3f;
+	_pos_sp(2) = -1.0f;
     _att_sp.yaw_body = -1.68f;
 }
 
