@@ -77,6 +77,10 @@
 #define TILT_COS_MAX	0.7f
 #define SIGMA			0.000001f
 #define MIN_DIST		0.01f
+#define ASL_LAB_CENTER_X    1.6283f
+#define ASL_LAB_CENTER_Y    2.0630f
+#define ASL_LAB_CENTER_Z    -1.5f
+#define ASL_LAB_CENTER_YAW  -1.68f
 
 /**
  * Multicopter position control app start / stop handling function
@@ -242,7 +246,7 @@ private:
 	/**
      * Set position setpoint using trajectory control - Ross Allen
      */
-    void        control_trajectory(float dt);
+    void        control_trajectory(float t, float dt);
     
     
     /**
@@ -723,13 +727,19 @@ MulticopterPositionControl::cross_sphere_line(const math::Vector<3>& sphere_c, f
 
 /* Added by Ross Allen */
 void
-MulticopterPositionControl::control_trajectory(float dt)
+MulticopterPositionControl::control_trajectory(float t, float dt)
 {
-    /* Just force a static setpoint for now */
-    _pos_sp(0) = 1.6283f;
-	_pos_sp(1) = 2.0630f;
-	_pos_sp(2) = -1.0f;
-    _att_sp.yaw_body = -1.68f;
+    //~ /* Just force a static setpoint for now */
+    //~ _pos_sp(0) = ASL_LAB_CENTER_X;
+	//~ _pos_sp(1) = ASL_LAB_CENTER_Y;
+	//~ _pos_sp(2) = ASL_LAB_CENTER_Z;
+    //~ _att_sp.yaw_body = ASL_LAB_CENTER_YAW;
+    
+    /* Simple circular trajectory */
+    _pos_sp(0) = 0.5f*(float)cos((double)t) + ASL_LAB_CENTER_X;
+    _pos_sp(1) = 0.5f*(float)sin((double)t) + ASL_LAB_CENTER_Y;
+    _pos_sp(2) = 0.5f*(float)cos((double)t) + ASL_LAB_CENTER_Z;
+    _att_sp.yaw_body = ASL_LAB_CENTER_YAW;
 }
 
 void
@@ -939,6 +949,7 @@ MulticopterPositionControl::task_main()
 		parameters_update(false);
 
 		hrt_abstime t = hrt_absolute_time();
+        float t_sec = t*0.000001f;
 		float dt = t_prev != 0 ? (t - t_prev) * 0.000001f : 0.0f;
 		t_prev = t;
 
@@ -983,7 +994,7 @@ MulticopterPositionControl::task_main()
                 
             } else if (_control_mode.flag_control_trajectory_enabled) {
                 /* trajectory control - Ross Allen */
-                control_trajectory(dt);
+                control_trajectory(t_sec, dt);
                 _mode_auto = false;
 
 			} else {
