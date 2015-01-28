@@ -73,14 +73,18 @@
 #include <mathlib/mathlib.h>
 #include <lib/geo/geo.h>
 #include <mavlink/mavlink_log.h>
+#include "mc_pos_control_asl_params.h"
 
 #define TILT_COS_MAX	0.7f
 #define SIGMA			0.000001f
 #define MIN_DIST		0.01f
+
+// parameters explicitly for work at ASL
 #define ASL_LAB_CENTER_X    1.6283f
 #define ASL_LAB_CENTER_Y    2.0630f
 #define ASL_LAB_CENTER_Z    -1.5f
 #define ASL_LAB_CENTER_YAW  -1.68f
+
 
 /**
  * Multicopter position control app start / stop handling function
@@ -357,6 +361,7 @@ MulticopterPositionControl::MulticopterPositionControl() :
 	_params_handles.land_speed	= param_find("MPC_LAND_SPEED");
 	_params_handles.tilt_max_land	= param_find("MPC_TILTMAX_LND");
 
+
 	/* fetch initial parameter values */
 	parameters_update(true);
 }
@@ -398,49 +403,120 @@ MulticopterPositionControl::parameters_update(bool force)
 	}
 
 	if (updated || force) {
-		param_get(_params_handles.thr_min, &_params.thr_min);
-		param_get(_params_handles.thr_max, &_params.thr_max);
-		param_get(_params_handles.tilt_max_air, &_params.tilt_max_air);
-		_params.tilt_max_air = math::radians(_params.tilt_max_air);
-		param_get(_params_handles.land_speed, &_params.land_speed);
-		param_get(_params_handles.tilt_max_land, &_params.tilt_max_land);
-		_params.tilt_max_land = math::radians(_params.tilt_max_land);
+            
+        /* Overide certain parameters for position control 
+         * Added for simplicity so as not to have to hunt down
+         * where these values are set and modified by Ross Allen
+         */
+         
+        if (USE_ASL_PARAMS) { 
 
-		float v;
-		param_get(_params_handles.xy_p, &v);
-		_params.pos_p(0) = v;
-		_params.pos_p(1) = v;
-		param_get(_params_handles.z_p, &v);
-		_params.pos_p(2) = v;
-		param_get(_params_handles.xy_vel_p, &v);
-		_params.vel_p(0) = v;
-		_params.vel_p(1) = v;
-		param_get(_params_handles.z_vel_p, &v);
-		_params.vel_p(2) = v;
-		param_get(_params_handles.xy_vel_i, &v);
-		_params.vel_i(0) = v;
-		_params.vel_i(1) = v;
-		param_get(_params_handles.z_vel_i, &v);
-		_params.vel_i(2) = v;
-		param_get(_params_handles.xy_vel_d, &v);
-		_params.vel_d(0) = v;
-		_params.vel_d(1) = v;
-		param_get(_params_handles.z_vel_d, &v);
-		_params.vel_d(2) = v;
-		param_get(_params_handles.xy_vel_max, &v);
-		_params.vel_max(0) = v;
-		_params.vel_max(1) = v;
-		param_get(_params_handles.z_vel_max, &v);
-		_params.vel_max(2) = v;
-		param_get(_params_handles.xy_ff, &v);
-		v = math::constrain(v, 0.0f, 1.0f);
-		_params.vel_ff(0) = v;
-		_params.vel_ff(1) = v;
-		param_get(_params_handles.z_ff, &v);
-		v = math::constrain(v, 0.0f, 1.0f);
-		_params.vel_ff(2) = v;
+            _params.thr_min = ASL_PARAMS_THR_MIN;
 
-		_params.sp_offs_max = _params.vel_max.edivide(_params.pos_p) * 2.0f;
+            _params.thr_max = ASL_PARAMS_THR_MAX;
+
+            _params.tilt_max_air = ASL_PARAMS_TILTMAX_AIR;
+            _params.tilt_max_air = math::radians(_params.tilt_max_air);
+
+            _params.land_speed = ASL_PARAMS_LAND_SPEED;
+
+            _params.tilt_max_land = ASL_PARAMS_TILTMAX_LND;
+            _params.tilt_max_land = math::radians(_params.tilt_max_land);
+
+            float v;
+
+            _params.pos_p(0) = ASL_PARAMS_XY_P;
+            _params.pos_p(1) = ASL_PARAMS_XY_P;
+
+            _params.pos_p(2) = ASL_PARAMS_Z_P;
+
+            _params.vel_p(0) = ASL_PARAMS_XY_VEL_P;
+            _params.vel_p(1) = ASL_PARAMS_XY_VEL_P;
+
+            _params.vel_p(2) = ASL_PARAMS_Z_VEL_P;
+
+            _params.vel_i(0) = ASL_PARAMS_XY_VEL_I;
+            _params.vel_i(1) = ASL_PARAMS_XY_VEL_I;
+
+            _params.vel_i(2) = ASL_PARAMS_Z_VEL_I;
+
+            _params.vel_d(0) = ASL_PARAMS_XY_VEL_D;
+            _params.vel_d(1) = ASL_PARAMS_XY_VEL_D;
+
+            _params.vel_d(2) = ASL_PARAMS_Z_VEL_D;
+
+            _params.vel_max(0) = ASL_PARAMS_XY_VEL_MAX;
+            _params.vel_max(1) = ASL_PARAMS_XY_VEL_MAX;
+
+            _params.vel_max(2) = ASL_PARAMS_Z_VEL_MAX;
+
+            v = math::constrain(ASL_PARAMS_XY_FF, 0.0f, 1.0f);
+            _params.vel_ff(0) = v;
+            _params.vel_ff(1) = v;
+
+            v = math::constrain(ASL_PARAMS_Z_FF, 0.0f, 1.0f);
+            _params.vel_ff(2) = v;
+
+            _params.sp_offs_max = _params.vel_max.edivide(_params.pos_p) * 2.0f;
+        
+        } else {
+            
+            param_get(_params_handles.thr_min, &_params.thr_min);
+            param_get(_params_handles.thr_max, &_params.thr_max);
+            param_get(_params_handles.tilt_max_air, &_params.tilt_max_air);
+            _params.tilt_max_air = math::radians(_params.tilt_max_air);
+            param_get(_params_handles.land_speed, &_params.land_speed);
+            param_get(_params_handles.tilt_max_land, &_params.tilt_max_land);
+            _params.tilt_max_land = math::radians(_params.tilt_max_land);
+
+            float v;
+            param_get(_params_handles.xy_p, &v);
+            _params.pos_p(0) = v;
+            _params.pos_p(1) = v;
+            
+            param_get(_params_handles.z_p, &v);
+            _params.pos_p(2) = v;
+            
+            param_get(_params_handles.xy_vel_p, &v);
+            _params.vel_p(0) = v;
+            _params.vel_p(1) = v;
+            
+            param_get(_params_handles.z_vel_p, &v);
+            _params.vel_p(2) = v;
+            
+            param_get(_params_handles.xy_vel_i, &v);
+            _params.vel_i(0) = v;
+            _params.vel_i(1) = v;
+
+            param_get(_params_handles.z_vel_i, &v);
+            _params.vel_i(2) = v;
+
+            param_get(_params_handles.xy_vel_d, &v);
+            _params.vel_d(0) = v;
+            _params.vel_d(1) = v;
+
+            param_get(_params_handles.z_vel_d, &v);
+            _params.vel_d(2) = v;
+
+            param_get(_params_handles.xy_vel_max, &v);
+            _params.vel_max(0) = v;
+            _params.vel_max(1) = v;
+
+            param_get(_params_handles.z_vel_max, &v);
+            _params.vel_max(2) = v;
+
+            param_get(_params_handles.xy_ff, &v);
+            v = math::constrain(v, 0.0f, 1.0f);
+            _params.vel_ff(0) = v;
+            _params.vel_ff(1) = v;
+
+            param_get(_params_handles.z_ff, &v);
+            v = math::constrain(v, 0.0f, 1.0f);
+            _params.vel_ff(2) = v;
+
+            _params.sp_offs_max = _params.vel_max.edivide(_params.pos_p) * 2.0f;
+                
+        }
 	}
 
 	return OK;
@@ -931,7 +1007,8 @@ MulticopterPositionControl::task_main()
 	fds[0].events = POLLIN;
 
 	while (!_task_should_exit) {
-		/* wait for up to 500ms for data */
+		
+        /* wait for up to 500ms for data */
 		int pret = poll(&fds[0], (sizeof(fds) / sizeof(fds[0])), 500);
 
 		/* timed out - periodic check for _task_should_exit */
