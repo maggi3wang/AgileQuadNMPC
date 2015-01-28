@@ -812,9 +812,9 @@ MulticopterPositionControl::control_trajectory(float t, float dt)
     //~ _att_sp.yaw_body = ASL_LAB_CENTER_YAW;
     
     /* Simple circular trajectory */
-    _pos_sp(0) = 0.5f*(float)cos((double)(2.0f*t/2.5f)*M_PI) + ASL_LAB_CENTER_X;
-    _pos_sp(1) = 0.5f*(float)sin((double)(2.0f*t/2.5f)*M_PI) + ASL_LAB_CENTER_Y;
-    _pos_sp(2) = 0.5f*(float)cos((double)(2.0f*t/10.0f)*M_PI) + ASL_LAB_CENTER_Z;
+    _pos_sp(0) = 0.5f*(float)cos((double)(2.0f*t/5.0f)*M_PI) + ASL_LAB_CENTER_X;
+    _pos_sp(1) = 0.5f*(float)sin((double)(2.0f*t/5.0f)*M_PI) + ASL_LAB_CENTER_Y;
+    _pos_sp(2) = 0.5f*(float)cos((double)(2.0f*t/20.0f)*M_PI) + ASL_LAB_CENTER_Z;
     _att_sp.yaw_body = ASL_LAB_CENTER_YAW;
 }
 
