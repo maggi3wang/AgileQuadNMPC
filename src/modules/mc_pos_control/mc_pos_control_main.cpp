@@ -195,6 +195,7 @@ private:
 	math::Vector<3> _vel;
 	math::Vector<3> _vel_sp;
 	math::Vector<3> _vel_prev;			/**< velocity on previous step */
+    math::Vector<3> _vel_err_prev;      /**< velcoity error on previous step - Ross Allen */
 	math::Vector<3> _vel_ff;
 	math::Vector<3> _sp_move_rate;
 
@@ -340,6 +341,7 @@ MulticopterPositionControl::MulticopterPositionControl() :
 	_vel.zero();
 	_vel_sp.zero();
 	_vel_prev.zero();
+    _vel_err_prev.zero();
 	_vel_ff.zero();
 	_sp_move_rate.zero();
 
@@ -811,11 +813,27 @@ MulticopterPositionControl::control_trajectory(float t, float dt)
 	//~ _pos_sp(2) = ASL_LAB_CENTER_Z;
     //~ _att_sp.yaw_body = ASL_LAB_CENTER_YAW;
     
+    float pi_f = (float)M_PI;
+    
     /* Simple circular trajectory */
-    _pos_sp(0) = 0.5f*(float)cos((double)(2.0f*t/5.0f)*M_PI) + ASL_LAB_CENTER_X;
-    _pos_sp(1) = 0.5f*(float)sin((double)(2.0f*t/5.0f)*M_PI) + ASL_LAB_CENTER_Y;
-    _pos_sp(2) = 0.5f*(float)cos((double)(2.0f*t/20.0f)*M_PI) + ASL_LAB_CENTER_Z;
+    //~ _pos_sp(0) = 0.5f*(float)cos((double)(2.0f*t/5.0f)*M_PI) + ASL_LAB_CENTER_X;
+    //~ _pos_sp(1) = 0.5f*(float)sin((double)(2.0f*t/5.0f)*M_PI) + ASL_LAB_CENTER_Y;
+    //~ _pos_sp(2) = 0.5f*(float)cos((double)(2.0f*t/20.0f)*M_PI) + ASL_LAB_CENTER_Z;
+    //~ _att_sp.yaw_body = ASL_LAB_CENTER_YAW;
+    //~ 
+    //~ _vel_ff(0) = 0.5f*(2.0f/5.0f)*((float)M_PI)*(-(float)sin((double)(2.0f*t/5.0f)*M_PI));
+    //~ _vel_ff(1) = 0.5f*(2.0f/5.0f)*((float)M_PI)*((float)cos((double)(2.0f*t/5.0f)*M_PI));
+    //~ _vel_ff(2) = 0.5f*(2.0f/20.0f)*((float)M_PI)*(-(float)sin((double)(2.0f*t/20.0f)*M_PI));
+    //~ _vel_ff = _vel_ff.emult(_params.vel_ff);
+    _pos_sp(0) = 0.5f*(float)cos(2.0f*pi_f*t/5.0f) + ASL_LAB_CENTER_X;
+    _pos_sp(1) = 0.5f*(float)sin(2.0f*pi_f*t/5.0f) + ASL_LAB_CENTER_Y;
+    _pos_sp(2) = 0.5f*(float)cos(2.0f*pi_f*t/20.0f) + ASL_LAB_CENTER_Z;
     _att_sp.yaw_body = ASL_LAB_CENTER_YAW;
+    
+    _vel_ff(0) = 0.5f*(2.0f*pi_f/5.0f)*(-(float)sin(2.0f*pi_f*t/5.0f));
+    _vel_ff(1) = 0.5f*(2.0f*pi_f/5.0f)*((float)cos(2.0f*pi_f*t/5.0f));
+    _vel_ff(2) = 0.5f*(2.0f*pi_f/20.0f)*(-(float)sin(2.0f*pi_f*t/20.0f));
+    _vel_ff = _vel_ff.emult(_params.vel_ff);
 }
 
 void
@@ -1190,8 +1208,10 @@ MulticopterPositionControl::task_main()
 					math::Vector<3> vel_err = _vel_sp - _vel;
 
 					/* derivative of velocity error, not includes setpoint acceleration */
-					math::Vector<3> vel_err_d = (_sp_move_rate - _vel).emult(_params.pos_p) - (_vel - _vel_prev) / dt;
+					//~ math::Vector<3> vel_err_d = (_sp_move_rate - _vel).emult(_params.pos_p) - (_vel - _vel_prev) / dt;
+                    math::Vector<3> vel_err_d = (vel_err - _vel_err_prev) / dt;     // Added by Ross Allen
 					_vel_prev = _vel;
+                    _vel_err_prev = vel_err;    // Added by Ross Allen
 
 					/* thrust vector in NED frame */
 					math::Vector<3> thrust_sp = vel_err.emult(_params.vel_p) + vel_err_d.emult(_params.vel_d) + thrust_int;
