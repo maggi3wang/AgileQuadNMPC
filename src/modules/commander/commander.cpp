@@ -128,7 +128,7 @@ extern struct system_load_s system_load;
 #define STICK_ON_OFF_COUNTER_LIMIT (STICK_ON_OFF_HYSTERESIS_TIME_MS*COMMANDER_MONITORING_LOOPSPERMSEC)
 
 #define POSITION_TIMEOUT		(2 * 1000 * 1000)	/**< consider the local or global position estimate invalid after 600ms */
-#define VICON_POSITION_TIMEOUT 1000000               /**< vicon invalid after 1s - NOTE a different timer is used in position_estimator_inav*/
+//#define VICON_POSITION_TIMEOUT 1000000               /**< vicon invalid after 1s - NOTE a different timer is used in position_estimator_inav*/
 #define FAILSAFE_DEFAULT_TIMEOUT	(3 * 1000 * 1000)	/**< hysteresis time - the failsafe will trigger after 3 seconds in this state */
 #define OFFBOARD_TIMEOUT		500000
 #define DIFFPRESS_TIMEOUT		2000000
@@ -1554,10 +1554,18 @@ int commander_thread_main(int argc, char *argv[])
         
         if (updated) {
             orb_copy(ORB_ID(vehicle_vicon_position), vicon_position_sub, &vicon_position);
+            
+            if (status.condition_vicon_position_valid && !vicon_position.valid) {
+                status.condition_vicon_position_valid = false;
+                status_changed = true;
+            } else if (!status.condition_vicon_position_valid && vicon_position.valid) {
+                status.condition_vicon_position_valid = true;
+                status_changed = true;
+            }
         }
         
-        check_valid(vicon_position.timestamp, VICON_POSITION_TIMEOUT, vicon_position.valid,
-			    &(status.condition_vicon_position_valid), &status_changed);
+        //~ check_valid(vicon_position.timestamp, VICON_POSITION_TIMEOUT, vicon_position.valid,
+			    //~ &(status.condition_vicon_position_valid), &status_changed);
 
 		/* start mission result check */
 		orb_check(mission_result_sub, &updated);

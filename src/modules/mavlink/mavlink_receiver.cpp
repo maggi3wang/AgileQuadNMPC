@@ -84,6 +84,8 @@ __BEGIN_DECLS
 
 __END_DECLS
 
+#define VICON_TOPIC_TIMEOUT 500000  // Vicon times out after 0.5s
+
 static const float mg2ms2 = CONSTANTS_ONE_G / 1000.0f;
 
 MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
@@ -121,7 +123,9 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 	_old_timestamp(0),
 	_hil_local_proj_inited(0),
 	_hil_local_alt0(0.0f),
-	_hil_local_proj_ref{}
+	_hil_local_proj_ref{},
+    _t_last_vicon(0),
+    _vicon_valid(false)
 {
 
 	// make sure the FTP server is started
@@ -158,7 +162,9 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 
 	case MAVLINK_MSG_ID_VICON_POSITION_ESTIMATE:
 		//printf("DEBUG: vicon message recieved\n");
-		handle_message_vicon_position_estimate(msg);
+        _vicon_valid = true;
+        _t_last_vicon = hrt_absolute_time();
+		handle_message_vicon_position_estimate(msg, true);
 		break;
 
 	case MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED:
@@ -465,25 +471,26 @@ MavlinkReceiver::handle_message_set_mode(mavlink_message_t *msg)
 }
 
 void
-MavlinkReceiver::handle_message_vicon_position_estimate(mavlink_message_t *msg)
+MavlinkReceiver::handle_message_vicon_position_estimate(mavlink_message_t *msg, bool incoming_data)
 {
-	mavlink_vicon_position_estimate_t pos;
-	mavlink_msg_vicon_position_estimate_decode(msg, &pos);
-
-	struct vehicle_vicon_position_s vicon_position;
+    struct vehicle_vicon_position_s vicon_position;
 	memset(&vicon_position, 0, sizeof(vicon_position));
-
-	vicon_position.timestamp = hrt_absolute_time();
-    vicon_position.valid = true;
-	vicon_position.x = pos.x;
-	vicon_position.y = pos.y;
-	vicon_position.z = pos.z;
-	vicon_position.roll = pos.roll;
-	vicon_position.pitch = pos.pitch;
-	vicon_position.yaw = pos.yaw;
+    vicon_position.valid = incoming_data;
     
-    /* Debug message */
-	//printf("DEBUG: vicon x = %d\n", (int)(pos.x*1000));
+    /* Pass on incoming data to uORB topic */
+    if (incoming_data) {
+        mavlink_vicon_position_estimate_t pos;
+        mavlink_msg_vicon_position_estimate_decode(msg, &pos);
+
+        vicon_position.timestamp = _t_last_vicon;
+        vicon_position.x = pos.x;
+        vicon_position.y = pos.y;
+        vicon_position.z = pos.z;
+        vicon_position.roll = pos.roll;
+        vicon_position.pitch = pos.pitch;
+        vicon_position.yaw = pos.yaw;
+    
+    } /* else there is no data and the vicon data is timed out. publish empty, invalid vicon topic */
 
 	if (_vicon_position_pub < 0) {
 		_vicon_position_pub = orb_advertise(ORB_ID(vehicle_vicon_position), &vicon_position);
@@ -1339,6 +1346,7 @@ MavlinkReceiver::receive_thread(void *arg)
 	uint8_t buf[32];
 
 	mavlink_message_t msg;
+    hrt_abstime t_cur;
 
 	/* set thread name */
 	char thread_name[24];
@@ -1352,6 +1360,9 @@ MavlinkReceiver::receive_thread(void *arg)
 	ssize_t nread = 0;
 
 	while (!_mavlink->_task_should_exit) {
+        
+        t_cur = hrt_absolute_time();    // current timestamp
+        
 		if (poll(fds, 1, timeout) > 0) {
 			/* non-blocking read. read may return negative values */
 			if ((nread = read(uart_fd, buf, sizeof(buf))) < (ssize_t)sizeof(buf)) {
@@ -1372,6 +1383,13 @@ MavlinkReceiver::receive_thread(void *arg)
 
 			/* count received bytes */
 			_mavlink->count_rxbytes(nread);
+		}
+        
+        if (_vicon_valid && (t_cur > (_t_last_vicon + VICON_TOPIC_TIMEOUT))) {
+			_vicon_valid = false;
+            mavlink_message_t empty_msg;
+            handle_message_vicon_position_estimate(&empty_msg, false);
+			warnx("VICON timeout");
 		}
 	}
 

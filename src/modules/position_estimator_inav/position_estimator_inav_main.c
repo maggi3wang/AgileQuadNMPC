@@ -90,7 +90,7 @@ static const hrt_abstime sonar_valid_timeout = 1000000;	// estimate sonar distan
 static const hrt_abstime xy_src_timeout = 2000000;	// estimate position during this time after position sources loss
 static const uint32_t updates_counter_len = 1000000;
 static const float max_flow = 1.0f;	// max flow value that can be used, rad/s
-static const hrt_abstime vicon_topic_timeout = 250000;		// vicon topic timeout = 0.25s
+static const hrt_abstime vicon_weight_reduction_timeout = 33333;		// vicon weight is reduced if not updated every 1/30 sec
 
 __EXPORT int position_estimator_inav_main(int argc, char *argv[]);
 
@@ -300,6 +300,10 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
     
     float corr_vicon[] = { 0.0f, 0.0f, 0.0f };	// N E D
     float w_vicon = 1.0f;
+    float w_vicon_p_min = 0.000001f;
+    float vicon_weight_increase_factor = 5.0f;
+    float vicon_weight_reduce_factor = 0.5f;
+    hrt_abstime vicon_timestamp = 0;
 	
 	float corr_sonar = 0.0f;
 	float corr_sonar_filtered = 0.0f;
@@ -800,25 +804,33 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 			if (updated) {
 				orb_copy(ORB_ID(vehicle_vicon_position), vehicle_vicon_position_sub, &vicon_pos);
                 
+                /* update timestamp since topic is updated */
+                vicon_timestamp = hrt_absolute_time();
+                    
                 /* reset estimate if first update since invalid vicon */
                 bool reset_est = false;
-                if(!vicon_valid) {
+                if(!vicon_valid && vicon_pos.valid) {
                     reset_est = true;
                 }
                 
-                w_vicon = params.w_vicon_p;
                 vicon_valid = vicon_pos.valid;
+                
+                /* increase weight if updated*/
+                //~ w_vicon = min(params.w_vicon_p, 10.0f*w_vicon);
+                float w_vicon_p_adjusted = vicon_weight_increase_factor*w_vicon;
+                w_vicon = params.w_vicon_p < w_vicon_p_adjusted ? params.w_vicon_p : w_vicon_p_adjusted;
+                //~ w_vicon = params.w_vicon_p;
 
 				if (vicon_valid) {
                     
                     /* reset position estimate when vicon becomes good */
                     if (reset_est) {
-                        x_est[0] = vicon_pos.x;
-                        //x_est[1] = vicon_vel.x;
-                        y_est[0] = vicon_pos.y;
-                        //y_est[1] = vicon_vel.y;
-                        z_est[0] = vicon_pos.z;
-                        //z_est[1] = vicon_vel.z;
+                        //~ x_est[0] = vicon_pos.x;
+                        //~ //x_est[1] = vicon_vel.x;
+                        //~ y_est[0] = vicon_pos.y;
+                        //~ //y_est[1] = vicon_vel.y;
+                        //~ z_est[0] = vicon_pos.z;
+                        //~ //z_est[1] = vicon_vel.z;
                     }
 
 
@@ -837,8 +849,18 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
                 
             } else {
                 
-                /* reduce weight if not updated */
-                w_vicon = w_vicon*0.5f;
+                /* check time since last update */
+                if ( t > vicon_timestamp + vicon_weight_reduction_timeout ) {
+                    
+                    /* reduce weight if not updated recently enough */
+                    float w_vicon_p_adjusted = vicon_weight_reduce_factor*w_vicon;
+                    w_vicon = w_vicon_p_min > w_vicon_p_adjusted ? w_vicon_p_min : w_vicon_p_adjusted;
+                    
+                    /* update timestamp since weight is updated */
+                    vicon_timestamp = hrt_absolute_time();
+                    
+                }
+                
             }
 		}
 
@@ -872,11 +894,11 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
         
         /* check for timeout on vicon topic */
         /* Added by Ross ALlen */
-		if (vicon_valid && (t > (vicon_pos.timestamp + vicon_topic_timeout))) {
-			vicon_valid = false;
-			warnx("VICON timeout");
-			mavlink_log_info(mavlink_fd, "[inav] VICON timeout");
-		}
+		//~ if (vicon_valid && (t > (vicon_pos.timestamp + vicon_topic_timeout))) {
+			//~ vicon_valid = false;
+			//~ warnx("VICON timeout");
+			//~ mavlink_log_info(mavlink_fd, "[inav] VICON timeout");
+		//~ }
 
 		float dt = t_prev > 0 ? (t - t_prev) / 1000000.0f : 0.0f;
 		dt = fmaxf(fminf(0.02, dt), 0.002);		// constrain dt from 2 to 20 ms
