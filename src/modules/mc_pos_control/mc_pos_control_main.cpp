@@ -195,9 +195,10 @@ private:
 	math::Vector<3> _vel;
 	math::Vector<3> _vel_sp;
 	math::Vector<3> _vel_prev;			/**< velocity on previous step */
-    math::Vector<3> _vel_err_prev;      /**< velcoity error on previous step - Ross Allen */
+    //~ math::Vector<3> _vel_err_prev;      /**< velcoity error on previous step - Ross Allen */
 	math::Vector<3> _vel_ff;
 	math::Vector<3> _sp_move_rate;
+    math::Vector<3> _acc_ff;            /**< acceleration of setpoint not including corrective terms - Ross Allen */
 
 	/**
 	 * Update our local parameter cache.
@@ -341,9 +342,10 @@ MulticopterPositionControl::MulticopterPositionControl() :
 	_vel.zero();
 	_vel_sp.zero();
 	_vel_prev.zero();
-    _vel_err_prev.zero();
+    //~ _vel_err_prev.zero();
 	_vel_ff.zero();
 	_sp_move_rate.zero();
+    _acc_ff.zero();
 
 	_params_handles.thr_min		= param_find("MPC_THR_MIN");
 	_params_handles.thr_max		= param_find("MPC_THR_MAX");
@@ -825,15 +827,23 @@ MulticopterPositionControl::control_trajectory(float t, float dt)
     //~ _vel_ff(1) = 0.5f*(2.0f/5.0f)*((float)M_PI)*((float)cos((double)(2.0f*t/5.0f)*M_PI));
     //~ _vel_ff(2) = 0.5f*(2.0f/20.0f)*((float)M_PI)*(-(float)sin((double)(2.0f*t/20.0f)*M_PI));
     //~ _vel_ff = _vel_ff.emult(_params.vel_ff);
-    _pos_sp(0) = 0.5f*(float)cos(2.0f*pi_f*t/5.0f) + ASL_LAB_CENTER_X;
-    _pos_sp(1) = 0.5f*(float)sin(2.0f*pi_f*t/5.0f) + ASL_LAB_CENTER_Y;
-    _pos_sp(2) = 0.5f*(float)cos(2.0f*pi_f*t/20.0f) + ASL_LAB_CENTER_Z;
+    float omega_xy = 2.0f*pi_f/5.0f;
+    float omega_z = 2.0f*pi_f/20.0f;
+    float amp_xy = 0.5f;
+    float amp_z = 0.5f;
+    _pos_sp(0) = amp_xy*(float)cos(omega_xy*t) + ASL_LAB_CENTER_X;
+    _pos_sp(1) = amp_xy*(float)sin(omega_xy*t) + ASL_LAB_CENTER_Y;
+    _pos_sp(2) = amp_xy*(float)cos(omega_z*t) + ASL_LAB_CENTER_Z;
     _att_sp.yaw_body = ASL_LAB_CENTER_YAW;
     
-    _vel_ff(0) = 0.5f*(2.0f*pi_f/5.0f)*(-(float)sin(2.0f*pi_f*t/5.0f));
-    _vel_ff(1) = 0.5f*(2.0f*pi_f/5.0f)*((float)cos(2.0f*pi_f*t/5.0f));
-    _vel_ff(2) = 0.5f*(2.0f*pi_f/20.0f)*(-(float)sin(2.0f*pi_f*t/20.0f));
-    _vel_ff = _vel_ff.emult(_params.vel_ff);
+    _vel_ff(0) = amp_xy*omega_xy*(-(float)sin(omega_xy*t));
+    _vel_ff(1) = amp_xy*omega_xy*((float)cos(omega_xy*t));
+    _vel_ff(2) = amp_z*omega_z*(-(float)sin(omega_z*t));
+    //~ _vel_ff = _vel_ff.emult(_params.vel_ff);
+    
+    _acc_ff(0) = amp_xy*omega_xy*omega_xy*(-(float)cos(omega_xy*t));
+    _acc_ff(1) = amp_xy*omega_xy*omega_xy*(-(float)sin(omega_xy*t));
+    _acc_ff(0) = amp_z*omega_z*omega_z*(-(float)cos(omega_z*t));
 }
 
 void
@@ -1075,6 +1085,7 @@ MulticopterPositionControl::task_main()
 
 			_vel_ff.zero();
 			_sp_move_rate.zero();
+            _acc_ff.zero();
 
 			/* select control source */
 			if (_control_mode.flag_control_manual_enabled) {
@@ -1207,11 +1218,19 @@ MulticopterPositionControl::task_main()
 					/* velocity error */
 					math::Vector<3> vel_err = _vel_sp - _vel;
 
-					/* derivative of velocity error, not includes setpoint acceleration */
-					//~ math::Vector<3> vel_err_d = (_sp_move_rate - _vel).emult(_params.pos_p) - (_vel - _vel_prev) / dt;
-                    math::Vector<3> vel_err_d = (vel_err - _vel_err_prev) / dt;     // Added by Ross Allen
+					/* derivative of velocity error */
+                    math::Vector<3> vel_err_d;
+                    vel_err_d.zero();
+                    if (_control_mode.flag_control_trajectory_enabled){
+                        /* make use of analytical knowledge of trajectory - Added by Ross Allen*/
+                        vel_err_d  = _acc_ff - (_vel - _vel_prev) / dt + (_vel_ff - _vel).emult(_params.pos_p);
+                    } else {
+                        /* do not include setpoint acceleration for modes were you don't know it analytically*/
+                        vel_err_d = (_sp_move_rate - _vel).emult(_params.pos_p) - (_vel - _vel_prev) / dt;
+                    }
+                    //~ math::Vector<3> vel_err_d = (vel_err - _vel_err_prev) / dt;     // Added by Ross Allen
 					_vel_prev = _vel;
-                    _vel_err_prev = vel_err;    // Added by Ross Allen
+                    //~ _vel_err_prev = vel_err;    // Added by Ross Allen
 
 					/* thrust vector in NED frame */
 					math::Vector<3> thrust_sp = vel_err.emult(_params.vel_p) + vel_err_d.emult(_params.vel_d) + thrust_int;

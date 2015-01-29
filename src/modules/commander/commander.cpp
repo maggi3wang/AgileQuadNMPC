@@ -2302,7 +2302,7 @@ set_control_mode()
     case NAVIGATION_STATE_ASL_TRAJCTL:
         control_mode.flag_control_trajectory_enabled = true;
         control_mode.flag_control_manual_enabled = false;
-		control_mode.flag_control_auto_enabled = true;
+		control_mode.flag_control_auto_enabled = false;     // This flag doesn't seem to be used anywhere, setting to false as a precaution
 		control_mode.flag_control_rates_enabled = true;
 		control_mode.flag_control_attitude_enabled = true;
 		control_mode.flag_control_altitude_enabled = true;
