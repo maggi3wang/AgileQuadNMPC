@@ -843,7 +843,7 @@ MulticopterPositionControl::control_trajectory(float t, float dt)
     
     _acc_ff(0) = amp_xy*omega_xy*omega_xy*(-(float)cos(omega_xy*t));
     _acc_ff(1) = amp_xy*omega_xy*omega_xy*(-(float)sin(omega_xy*t));
-    _acc_ff(0) = amp_z*omega_z*omega_z*(-(float)cos(omega_z*t));
+    _acc_ff(2) = amp_z*omega_z*omega_z*(-(float)cos(omega_z*t));
 }
 
 void
