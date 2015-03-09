@@ -85,6 +85,8 @@
 #define ASL_LAB_CENTER_Z    -1.5f
 #define ASL_LAB_CENTER_YAW  -1.68f
 
+#define POLY_START_DELAY 1000000
+
 
 /**
  * Multicopter position control app start / stop handling function
@@ -189,7 +191,8 @@ private:
 	bool _reset_pos_sp;
 	bool _reset_alt_sp;
 	bool _mode_auto;
-
+    bool control_trajectory_started;
+    
 	math::Vector<3> _pos;
 	math::Vector<3> _pos_sp;
 	math::Vector<3> _vel;
@@ -199,6 +202,25 @@ private:
 	math::Vector<3> _vel_ff;
 	math::Vector<3> _sp_move_rate;
     math::Vector<3> _acc_ff;            /**< acceleration of setpoint not including corrective terms - Ross Allen */
+    
+    /* initialize polynomial coefficients */
+    // TODO: change this later to accept new coefficients
+    //~ float x_coefs[10] = { 2.0, 0, 0, 0, 0, 1.26, -1.93, 1.17, -0.331, 0.037 };
+    float x_coefs[10] = { 0.037, -0.331, 1.17, -1.93, 1.26, 0, 0, 0, 0, 2.0 };
+    float xv_coefs[9] = { 9.0f*0.037f, 8.0f*-0.331f, 7.0f*1.17f, 6.0f*-1.93f, 5.0f*1.26f, 4.0f*0.0f, 3.0f*0.0f, 2.0f*0.0f, 1.0f*0.0f };
+    float xa_coefs[8] = { 8.0f*9.0f*0.037f, 7.0f*8.0f*-0.331f, 6.0f*7.0f*1.17f, 5.0f*6.0f*-1.93f, 4.0f*5.0f*1.26f, 3.0f*4.0f*0.0f, 2.0f*3.0f*0.0f, 2.0f*0.0f};
+    //~ float y_coefs[10] = { 4.0, 0, 0, 0, 0, -1.09, 1.44, -0.799, 0.216, -0.0234 };
+    float y_coefs[10] = { -0.0234, 0.216, -0.799, 1.44, -1.09, 0, 0, 0, 0, 4.0 };
+    float yv_coefs[9] = { 9.0f*-0.0234f, 8.0f*0.216f, 7.0f*-0.799f, 6.0f*1.44f, 5.0f*-1.09f, 4.0f*0.0f, 3.0f*0.0f, 2.0f*0.0f, 0.0f };
+    float ya_coefs[8] = { 8.0f*9.0f*-0.0234f, 7.0f*8.0f*0.216f, 6.0f*7.0f*-0.799f, 5.0f*6.0f*1.44f, 4.0f*5.0f*-1.09f, 3.0f*4.0f*0.0f, 2.0f*3.0f*0.0f, 2.0f*0.0f};
+    //~ float z_coefs[10] = { -1.0, 0, 0, 0, 0, -0.965, 1.45, -0.867, 0.245, -0.027 };
+    float z_coefs[10] = { -0.027f, 0.245f, -0.867f, 1.45f, -0.965f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f };
+    float zv_coefs[9] = { 9.0f*-0.027f, 8.0f*0.245f, 7.0f*-0.867f, 6.0f*1.45f, 5.0f*-0.965f, 4.0f*0.0f, 3.0f*0.0f, 2.0f*0.0f, 0.0f};
+    float za_coefs[8] = { 8.0f*9.0f*-0.027f, 7.0f*8.0f*0.245f, 6.0f*7.0f*-0.867f, 5.0f*6.0f*1.45f, 4.0f*5.0f*-0.965f, 3.0f*4.0f*0.0f, 2.0f*3.0f*0.0f, 2.0f*0.0f };
+    
+    float yaw_coefs[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }; 
+    float yawv_coefs[9] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 }; 
+    float yawa_coefs[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; 
 
 	/**
 	 * Update our local parameter cache.
@@ -252,7 +274,13 @@ private:
 	/**
      * Set position setpoint using trajectory control - Ross Allen
      */
-    void        control_trajectory(float t, float dt);
+    void        control_periodic_trajectory(float t, float dt);
+    void        control_polynomial_trajectory(float t, float start_t, float dt);
+    
+    /**
+     * Evaluate polynomials
+     * */
+    float       poly_eval(const float coefs[], int deg, float t);
     
     
     /**
@@ -807,7 +835,7 @@ MulticopterPositionControl::cross_sphere_line(const math::Vector<3>& sphere_c, f
 
 /* Added by Ross Allen */
 void
-MulticopterPositionControl::control_trajectory(float t, float dt)
+MulticopterPositionControl::control_periodic_trajectory(float t, float dt)
 {
     //~ /* Just force a static setpoint for now */
     //~ _pos_sp(0) = ASL_LAB_CENTER_X;
@@ -844,6 +872,44 @@ MulticopterPositionControl::control_trajectory(float t, float dt)
     _acc_ff(0) = amp_xy*omega_xy*omega_xy*(-(float)cos(omega_xy*t));
     _acc_ff(1) = amp_xy*omega_xy*omega_xy*(-(float)sin(omega_xy*t));
     _acc_ff(2) = amp_z*omega_z*omega_z*(-(float)cos(omega_z*t));
+}
+
+/* Added by Ross Allen */
+void
+MulticopterPositionControl::control_polynomial_trajectory(float t, float start_t, float dt)
+{
+    int fsize = sizeof(float);
+    float cur_poly_t = t - start_t;
+    
+    _pos_sp(0) = poly_eval(x_coefs, sizeof(x_coefs)/fsize-1, cur_poly_t);
+    _pos_sp(1) = poly_eval(y_coefs, sizeof(x_coefs)/fsize-1, cur_poly_t);
+    _pos_sp(2) = poly_eval(z_coefs, sizeof(x_coefs)/fsize-1, cur_poly_t);
+    _att_sp.yaw_body = poly_eval(yaw_coefs, sizeof(yaw_coefs)/fsize-1, cur_poly_t);
+    
+    _vel_ff(0) = poly_eval(xv_coefs, sizeof(xv_coefs)/fsize-1, cur_poly_t);
+    _vel_ff(1) = poly_eval(yv_coefs, sizeof(yv_coefs)/fsize-1, cur_poly_t);
+    _vel_ff(2) = poly_eval(zv_coefs, sizeof(zv_coefs)/fsize-1, cur_poly_t);
+    
+    _acc_ff(0) = poly_eval(xa_coefs, sizeof(xa_coefs)/fsize-1, cur_poly_t);
+    _acc_ff(1) = poly_eval(ya_coefs, sizeof(ya_coefs)/fsize-1, cur_poly_t);
+    _acc_ff(2) = poly_eval(za_coefs, sizeof(za_coefs)/fsize-1, cur_poly_t);
+}
+
+/* Added by Ross Allen */
+// NOTE: becareful when calling, there is no check to make sure we are
+//      calling out of range of array
+float
+MulticopterPositionControl::poly_eval(const float coefs[], int deg, float t)
+{
+    
+    float p = coefs[deg];    // return value
+    
+    for(int i = deg-1; i>=0; --i){
+        // Calculate with Horner's Rule
+        p = p*t + coefs[i];
+    }
+    
+    return p;
 }
 
 void
@@ -1020,6 +1086,7 @@ MulticopterPositionControl::task_main()
 	bool reset_int_z_manual = false;
 	bool reset_int_xy = true;
 	bool was_armed = false;
+    control_trajectory_started = false;
 
 	hrt_abstime t_prev = 0;
 
@@ -1027,6 +1094,8 @@ MulticopterPositionControl::task_main()
 	thrust_int.zero();
 	math::Matrix<3, 3> R;
 	R.identity();
+    
+    float poly_start_t;
 
 	/* wakeup source */
 	struct pollfd fds[1];
@@ -1054,7 +1123,7 @@ MulticopterPositionControl::task_main()
 		parameters_update(false);
 
 		hrt_abstime t = hrt_absolute_time();
-        float t_sec = t*0.000001f;
+        float t_sec = ((float)t)*0.000001f;
 		float dt = t_prev != 0 ? (t - t_prev) * 0.000001f : 0.0f;
 		t_prev = t;
 
@@ -1100,13 +1169,29 @@ MulticopterPositionControl::task_main()
                 
             } else if (_control_mode.flag_control_trajectory_enabled) {
                 /* trajectory control - Ross Allen */
-                control_trajectory(t_sec, dt);
+                
+                if (!control_trajectory_started) {
+                    control_trajectory_started = true;
+                    poly_start_t = ((float)(t + POLY_START_DELAY))*0.000001f;
+                    
+                    // Calculate derivative coefficients
+                    //~ float xv_coefs = poly_derivative(
+                }
+                
+                control_polynomial_trajectory(t_sec, poly_start_t, dt);
                 _mode_auto = false;
 
 			} else {
 				/* AUTO */
 				control_auto(dt);
 			}
+            
+            /* reset trajectory start time */
+            if (!_control_mode.flag_control_trajectory_enabled && \
+                control_trajectory_started){
+            
+                control_trajectory_started = false;
+            }                
 
 			/* fill local position setpoint */
 			_local_pos_sp.timestamp = hrt_absolute_time();
