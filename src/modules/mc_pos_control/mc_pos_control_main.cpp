@@ -85,7 +85,7 @@
 #define ASL_LAB_CENTER_Z    -1.5f
 #define ASL_LAB_CENTER_YAW  -1.68f
 
-#define POLY_START_DELAY 1000000
+//~ #define POLY_START_DELAY 1000000
 
 
 /**
@@ -1186,7 +1186,7 @@ MulticopterPositionControl::task_main()
                 
                 if (!control_trajectory_started) {
                     control_trajectory_started = true;
-                    poly_start_t = ((float)(t + POLY_START_DELAY))*0.000001f;
+                    poly_start_t = ((float)t)*0.000001f;
                     
                     // Calculate derivative coefficients
                     //~ float xv_coefs = poly_derivative(
