@@ -85,7 +85,7 @@
 #define ASL_LAB_CENTER_Z    -1.5f
 #define ASL_LAB_CENTER_YAW  -1.68f
 
-//~ #define POLY_START_DELAY 1000000
+#define POLY_START_DELAY 1000000
 
 
 /**
@@ -889,7 +889,21 @@ MulticopterPositionControl::control_polynomial_trajectory(float t, float start_t
     int fsize = sizeof(float);
     float cur_poly_t = t - start_t;
     
-    if (cur_poly_t > 0 && cur_poly_t < poly_term_t) {
+    if (cur_poly_t <= 0) {
+        
+        _pos_sp(0) = poly_eval(x_coefs, sizeof(x_coefs)/fsize-1, 0.0f);
+        _pos_sp(1) = poly_eval(y_coefs, sizeof(y_coefs)/fsize-1, 0.0f);
+        _pos_sp(2) = poly_eval(z_coefs, sizeof(z_coefs)/fsize-1, 0.0f);
+        
+        _vel_ff(0) = 0.0f;
+        _vel_ff(1) = 0.0f;
+        _vel_ff(2) = 0.0f;
+        
+        _acc_ff(0) = 0.0f;
+        _acc_ff(1) = 0.0f;
+        _acc_ff(2) = 0.0f;
+        
+    } else if (cur_poly_t > 0 && cur_poly_t < poly_term_t) {
     
         _pos_sp(0) = poly_eval(x_coefs, sizeof(x_coefs)/fsize-1, cur_poly_t);
         _pos_sp(1) = poly_eval(y_coefs, sizeof(y_coefs)/fsize-1, cur_poly_t);
@@ -905,6 +919,18 @@ MulticopterPositionControl::control_polynomial_trajectory(float t, float start_t
         _acc_ff(2) = poly_eval(za_coefs, sizeof(za_coefs)/fsize-1, cur_poly_t);
     
     } else {
+        
+        _pos_sp(0) = poly_eval(x_coefs, sizeof(x_coefs)/fsize-1, poly_term_t);
+        _pos_sp(1) = poly_eval(y_coefs, sizeof(y_coefs)/fsize-1, poly_term_t);
+        _pos_sp(2) = poly_eval(z_coefs, sizeof(z_coefs)/fsize-1, poly_term_t);
+        
+        _vel_ff(0) = 0.0f;
+        _vel_ff(1) = 0.0f;
+        _vel_ff(2) = 0.0f;
+        
+        _acc_ff(0) = 0.0f;
+        _acc_ff(1) = 0.0f;
+        _acc_ff(2) = 0.0f;
         
     }
 }
@@ -1186,7 +1212,7 @@ MulticopterPositionControl::task_main()
                 
                 if (!control_trajectory_started) {
                     control_trajectory_started = true;
-                    poly_start_t = ((float)t)*0.000001f;
+                    poly_start_t = ((float)(t + POLY_START_DELAY))*0.000001f;
                     
                     // Calculate derivative coefficients
                     //~ float xv_coefs = poly_derivative(
