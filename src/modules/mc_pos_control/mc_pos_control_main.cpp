@@ -193,7 +193,7 @@ private:
 	bool _reset_pos_sp;
 	bool _reset_alt_sp;
 	bool _mode_auto;
-    bool control_trajectory_started;
+    bool _control_trajectory_started;
     
 	math::Vector<3> _pos;
 	math::Vector<3> _pos_sp;
@@ -1040,20 +1040,25 @@ MulticopterPositionControl::control_periodic_trajectory(float t, float dt)
 void
 MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
 {
+    printf("DEBUG005\n");
     // determine time in spline trajectory
     float cur_spline_t = t - start_t;
     float spline_term_t = _spline_cumt_sec.at(_spline_cumt_sec.size()-1);
     
+    printf("DEBUG005a\n");
     // determine polynomial segment being evaluated
     std::vector<float>::iterator seg_it;
     seg_it = std::lower_bound(_spline_cumt_sec.begin(), 
         _spline_cumt_sec.end(), cur_spline_t);
     int cur_seg = (int)(seg_it - _spline_cumt_sec.begin());
     
+    printf("DEBUG005b\n");
     // determine time in polynomial segment
     float cur_poly_t = t - _spline_cumt_sec.at(cur_seg);
     
     if (cur_spline_t <= 0) {
+        
+        printf("DEBUG005c\n");
         
         _pos_sp(0) = poly_eval(_x_coefs.at(0), 0.0f);
         _pos_sp(1) = poly_eval(_y_coefs.at(0), 0.0f);
@@ -1068,6 +1073,8 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
         _acc_ff(2) = 0.0f;
         
     } else if (cur_spline_t > 0 && cur_spline_t < spline_term_t) {
+        
+        printf("DEBUG005d\n");
     
         _pos_sp(0) = poly_eval(_x_coefs.at(cur_seg), cur_poly_t);
         _pos_sp(1) = poly_eval(_y_coefs.at(cur_seg), cur_poly_t);
@@ -1084,6 +1091,8 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
     
     } else {
         
+        printf("DEBUG005e\n");
+        
         _pos_sp(0) = poly_eval(_x_coefs.at(_x_coefs.size()-1), spline_term_t);
         _pos_sp(1) = poly_eval(_y_coefs.at(_y_coefs.size()-1), spline_term_t);
         _pos_sp(2) = poly_eval(_z_coefs.at(_z_coefs.size()-1), spline_term_t);
@@ -1097,6 +1106,8 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
         _acc_ff(2) = 0.0f;
         
     }
+    
+    printf("DEBUG005f\n");
 }
 
 /* Added by Ross Allen */
@@ -1121,17 +1132,30 @@ float
 MulticopterPositionControl::poly_eval(const std::vector<float>& coefs, float t)
 {
     
+    printf("DEBUG006\n");
+    
     typedef std::vector<float>::size_type vecf_sz;
     vecf_sz deg = coefs.size()-1;
+    
+    printf("DEBUG006a\n");
     
     // initialize return value
     float p = coefs.at(deg);
     
+    printf("DEBUG006b\n");
+    
+    
+    THIS IS THE PROBLEM. THIS LOOP GOES TO i=-1 FOR SOME REASON!!
     for(vecf_sz i = deg-1; i>=0; --i){
+        
+        printf("DEBUG006c\n");
+        printf("DEBUG: i = %d\n", (int)(i));
+        printf("DEBUG: coef(i) = %d\n", (int)(coefs.at(i)*1000.0f));
         // Calculate with Horner's Rule
         p = p*t + coefs.at(i);
     }
     
+    printf("DEBUG006d\n");
     return p;
 }
 
@@ -1152,24 +1176,41 @@ MulticopterPositionControl::poly_deriv(
 const std::vector< std::vector<float> >& poly,
 std::vector< std::vector<float> >& deriv) {
     
+    printf("DEBUG004\n");
+    
     typedef std::vector<float>::size_type vecf_sz;
     typedef std::vector< std::vector<float> >::size_type vecf2d_sz;
+    
+    printf("DEBUG004a\n");
     
     vecf2d_sz numrows = poly.size();
     deriv.resize(numrows);      // resize number rows
     
+    printf("DEBUG004b\n");
+    
     for (vecf2d_sz row = 0; row != numrows; ++row) {
         
+        printf("DEBUG004c\n");
+        
         vecf_sz numcols = poly.at(row).size();
+        deriv.at(row).resize(numcols);
         
         for (vecf_sz col = 0; col != numcols; ++col) {
+            
+            printf("DEBUG004d\n");
+            printf("DEBUG: float col = %d\n", (int)(((float)col)*1000.0f));
+            printf("DEBUG: poly = %d\n", (int)(poly.at(row).at(col)*1000.0f));
             
             deriv.at(row).at(col) = ((float)col)*poly.at(row).at(col);
         }
         
+        printf("DEBUG004e\n");
+        
         // remove first element
         deriv.at(row).erase(deriv.at(row).begin());
     }
+    
+    printf("DEBUG004f\n");
     
 }
 
@@ -1347,7 +1388,7 @@ MulticopterPositionControl::task_main()
 	bool reset_int_z_manual = false;
 	bool reset_int_xy = true;
 	bool was_armed = false;
-    control_trajectory_started = false;
+    _control_trajectory_started = false;
 
 	hrt_abstime t_prev = 0;
 
@@ -1481,13 +1522,18 @@ MulticopterPositionControl::task_main()
             } else if (_control_mode.flag_control_trajectory_enabled) {
                 /* trajectory control - Ross Allen */
                 
-                if (!control_trajectory_started) {
-                    control_trajectory_started = true;
+                printf("DEBUG001\n");
+                
+                if (!_control_trajectory_started) {
+                    printf("DEBUG002\n");
+                    _control_trajectory_started = true;
                     //~ poly_start_t = ((float)(t + SPLINE_START_DELAY))*0.000001f;
                     
                     // Generate cumulative time vector
                     spline_start_t_sec = ((float)(t + SPLINE_START_DELAY))*0.000001f;
+                    printf("DEBUG002a\n");
                     vector_cum_sum(_spline_delt_sec, spline_start_t_sec, _spline_cumt_sec);
+                    printf("DEBUG002b\n");
                     
                     // Calculate derivative coefficients
                     poly_deriv(_x_coefs, _xv_coefs);
@@ -1496,6 +1542,7 @@ MulticopterPositionControl::task_main()
                     poly_deriv(_yv_coefs, _ya_coefs);
                     poly_deriv(_z_coefs, _zv_coefs);
                     poly_deriv(_zv_coefs, _za_coefs);
+                    printf("DEBUG003\n");
                 }
                 
                 /* call trajectory controller */
@@ -1512,9 +1559,9 @@ MulticopterPositionControl::task_main()
             
             /* reset trajectory start time */
             if (!_control_mode.flag_control_trajectory_enabled && \
-                control_trajectory_started){
+                _control_trajectory_started){
             
-                control_trajectory_started = false;
+                _control_trajectory_started = false;
             }                
 
 			/* fill local position setpoint */
