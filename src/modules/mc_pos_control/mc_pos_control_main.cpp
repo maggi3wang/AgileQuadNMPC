@@ -1063,6 +1063,7 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
         _pos_sp(0) = poly_eval(_x_coefs.at(0), 0.0f);
         _pos_sp(1) = poly_eval(_y_coefs.at(0), 0.0f);
         _pos_sp(2) = poly_eval(_z_coefs.at(0), 0.0f);
+        _att_sp.yaw_body = poly_eval(_yaw_coefs.at(0), 0.0f);
         
         _vel_ff(0) = 0.0f;
         _vel_ff(1) = 0.0f;
@@ -1092,6 +1093,7 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
         _pos_sp(0) = poly_eval(_x_coefs.at(_x_coefs.size()-1), poly_term_t);
         _pos_sp(1) = poly_eval(_y_coefs.at(_y_coefs.size()-1), poly_term_t);
         _pos_sp(2) = poly_eval(_z_coefs.at(_z_coefs.size()-1), poly_term_t);
+        _att_sp.yaw_body = poly_eval(_yaw_coefs.at(_yaw_coefs.size()-1), poly_term_t);
         
         _vel_ff(0) = 0.0f;
         _vel_ff(1) = 0.0f;
@@ -1404,8 +1406,8 @@ MulticopterPositionControl::task_main()
         { -1.50f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 
         -1.50f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
     float yaw_coefs_arr[n_seg*(n_coef+1)] = 
-        { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,  
-        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+        { ASL_LAB_CENTER_YAW, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,  
+        ASL_LAB_CENTER_YAW, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 
     // initialize vector of appropriate size
     _x_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
