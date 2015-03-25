@@ -1145,14 +1145,19 @@ MulticopterPositionControl::poly_eval(const std::vector<float>& coefs, float t)
     printf("DEBUG006b\n");
     
     
-    THIS IS THE PROBLEM. THIS LOOP GOES TO i=-1 FOR SOME REASON!!
-    for(vecf_sz i = deg-1; i>=0; --i){
+    for(vecf_sz i = deg-1; ; --i){
         
         printf("DEBUG006c\n");
         printf("DEBUG: i = %d\n", (int)(i));
         printf("DEBUG: coef(i) = %d\n", (int)(coefs.at(i)*1000.0f));
         // Calculate with Horner's Rule
         p = p*t + coefs.at(i);
+        
+        // Check break condition.
+        // This clunky for a for loop but is necessary because vecf_sz
+        // in some form of unsigned int. If the condition is left as
+        // i >= 0, then the condition is always true
+        if (i == 0) break;
     }
     
     printf("DEBUG006d\n");
