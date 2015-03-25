@@ -1060,11 +1060,6 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
     
     if (cur_spline_t <= 0) {
         
-        //~ printf("DEBUG001: pt %d\n", (int)(cur_poly_t*1000.0f));
-        //~ printf("DEBUG001: st %d\n", (int)(cur_spline_t*1000.0f));
-        //~ printf("DEBUG001: seg %d\n", cur_seg);
-        //~ printf("DEBUG001: term %d\n", (int)(_spline_cumt_sec.at(cur_seg)*1000.0f));
-        
         _pos_sp(0) = poly_eval(_x_coefs.at(0), 0.0f);
         _pos_sp(1) = poly_eval(_y_coefs.at(0), 0.0f);
         _pos_sp(2) = poly_eval(_z_coefs.at(0), 0.0f);
@@ -1078,11 +1073,6 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
         _acc_ff(2) = 0.0f;
         
     } else if (cur_spline_t > 0 && cur_spline_t < spline_term_t) {
-        
-        //~ printf("DEBUG002: pt %d\n", (int)(cur_poly_t*1000.0f));
-        //~ printf("DEBUG002: st %d\n", (int)(cur_spline_t*1000.0f));
-        //~ printf("DEBUG002: seg %d\n", cur_seg);
-        //~ printf("DEBUG002: term %d\n", (int)(_spline_cumt_sec.at(cur_seg)*1000.0f));
     
         _pos_sp(0) = poly_eval(_x_coefs.at(cur_seg), cur_poly_t);
         _pos_sp(1) = poly_eval(_y_coefs.at(cur_seg), cur_poly_t);
@@ -1098,8 +1088,6 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
         _acc_ff(2) = poly_eval(_za_coefs.at(cur_seg), cur_poly_t);
     
     } else {
-        
-        //~ printf("DEBUG003: %d\n", (int)(cur_poly_t*1000.0f));
         
         _pos_sp(0) = poly_eval(_x_coefs.at(_x_coefs.size()-1), poly_term_t);
         _pos_sp(1) = poly_eval(_y_coefs.at(_y_coefs.size()-1), poly_term_t);
