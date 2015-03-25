@@ -1056,7 +1056,7 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
     // determine time in polynomial segment
     float cur_poly_t = cur_seg == 0 ? cur_spline_t :
                 cur_spline_t - _spline_cumt_sec.at(cur_seg-1);
-    float poly_term_t = _spline_delt_sec.at(cur_seg);
+    float poly_term_t = cur_seg == 0 ? 0.0f : _spline_delt_sec.at(cur_seg-1);
     
     if (cur_spline_t <= 0) {
         
@@ -1100,7 +1100,6 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
         _acc_ff(0) = 0.0f;
         _acc_ff(1) = 0.0f;
         _acc_ff(2) = 0.0f;
-        
     }
     
 }
