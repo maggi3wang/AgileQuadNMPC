@@ -205,69 +205,12 @@ private:
 	math::Vector<3> _sp_move_rate;
     math::Vector<3> _acc_ff;            /**< acceleration of setpoint not including corrective terms - Ross Allen */
     
-    /* initialize polynomial coefficients */
-    // TODO: change this later to accept new coefficients
-    //~ float x_coefs[10] = { 2.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.26f, -1.93f, 1.17f, -0.331f, 0.037f };
-    //~ float xv_coefs[9] = { 0.0f, 2.0f*0.0f, 3.0f*0.0f, 4.0f*0.0f, 5.0f*1.26f, 6.0f*-1.93f, 7.0f*1.17f, 8.0f*-0.331f, 9.0f*0.037f };
-    //~ float xa_coefs[8] = { 2.0f*0.0f, 2.0f*3.0f*0.0f, 3.0f*4.0f*0.0f, 4.0f*5.0f*1.26f, 5.0f*6.0f*-1.93f, 6.0f*7.0f*1.17f, 7.0f*8.0f*-0.331f, 98.0f*9.0f*0.037f };
-    //~ //float x_coefs[10] = { 0.037, -0.331, 1.17, -1.93, 1.26, 0, 0, 0, 0, 2.0 };
-    //~ //float xv_coefs[9] = { 9.0f*0.037f, 8.0f*-0.331f, 7.0f*1.17f, 6.0f*-1.93f, 5.0f*1.26f, 4.0f*0.0f, 3.0f*0.0f, 2.0f*0.0f, 1.0f*0.0f };
-    //~ //float xa_coefs[8] = { 8.0f*9.0f*0.037f, 7.0f*8.0f*-0.331f, 6.0f*7.0f*1.17f, 5.0f*6.0f*-1.93f, 4.0f*5.0f*1.26f, 3.0f*4.0f*0.0f, 2.0f*3.0f*0.0f, 2.0f*0.0f};
-    //~ float y_coefs[10] = { 4.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.09f, 1.44f, -0.799f, 0.216f, -0.0234f };
-    //~ float yv_coefs[9] = { 0.0f, 2.0f*0.0f, 3.0f*0.0f, 4.0f*0.0f, 5.0f*-1.09f, 6.0f*1.44f, 7.0f*-0.799f, 8.0f*0.216f, 9.0f*-0.0234f };
-    //~ float ya_coefs[8] = { 2.0f*0.0f, 2.0f*3.0f*0.0f, 3.0f*4.0f*0.0f, 4.0f*5.0f*-1.09f, 5.0f*6.0f*1.44f, 6.0f*7.0f*-0.799f, 7.0f*8.0f*0.216f, 8.0f*9.0f*-0.0234f };
-    //~ //float y_coefs[10] = { -0.0234, 0.216, -0.799, 1.44, -1.09, 0, 0, 0, 0, 4.0 };
-    //~ //float yv_coefs[9] = { 9.0f*-0.0234f, 8.0f*0.216f, 7.0f*-0.799f, 6.0f*1.44f, 5.0f*-1.09f, 4.0f*0.0f, 3.0f*0.0f, 2.0f*0.0f, 0.0f };
-    //~ //float ya_coefs[8] = { 8.0f*9.0f*-0.0234f, 7.0f*8.0f*0.216f, 6.0f*7.0f*-0.799f, 5.0f*6.0f*1.44f, 4.0f*5.0f*-1.09f, 3.0f*4.0f*0.0f, 2.0f*3.0f*0.0f, 2.0f*0.0f};
-    //~ float z_coefs[10] = { -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, -0.965f, 1.45f, -0.867f, 0.245f, -0.027f };
-    //~ float zv_coefs[9] = { 0.0f, 2.0f*0.0f, 3.0f*0.0f, 4.0f*0.0f, 5.0f*-0.965f, 6.0f*1.45f, 7.0f*-0.867f, 8.0f*0.245f, 9.0f*-0.027f };
-    //~ float za_coefs[8] = { 2.0f*0.0f, 2.0f*3.0f*0.0f, 3.0f*4.0f*0.0f, 4.0f*5.0f*-0.965f, 5.0f*6.0f*1.45f, 6.0f*7.0f*-0.867f, 7.0f*8.0f*0.245f, 8.0f*9.0f*-0.027f };
-    //~ //float z_coefs[10] = { -0.027f, 0.245f, -0.867f, 1.45f, -0.965f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f };
-    //~ //float zv_coefs[9] = { 9.0f*-0.027f, 8.0f*0.245f, 7.0f*-0.867f, 6.0f*1.45f, 5.0f*-0.965f, 4.0f*0.0f, 3.0f*0.0f, 2.0f*0.0f, 0.0f};
-    //~ //float za_coefs[8] = { 8.0f*9.0f*-0.027f, 7.0f*8.0f*0.245f, 6.0f*7.0f*-0.867f, 5.0f*6.0f*1.45f, 4.0f*5.0f*-0.965f, 3.0f*4.0f*0.0f, 2.0f*3.0f*0.0f, 2.0f*0.0f };
-    
-    //~ float x_coefs[10] = { 1.63f, 0.0f, 0.0f, 0.0f, 0.0f, 2.15f, -3.78f, 2.65f, -0.876f, 0.114f };
-    //~ float xv_coefs[9] = { 1.0f*0.0f, 2.0f*0.0f, 3.0f*0.0f, 4.0f*0.0f, 5.0f*2.15f, 6.0f*-3.78f, 7.0f*2.65f, 8.0f*-0.876f, 9.0f*0.114f };
-    //~ float xa_coefs[8] = { 1.0f*2.0f*0.0f, 2.0f*3.0f*0.0f, 3.0f*4.0f*0.0f, 4.0f*5.0f*2.15f, 5.0f*6.0f*-3.78f, 6.0f*7.0f*2.65f, 7.0f*8.0f*-0.876f, 8.0f*9.0f*0.114f };
-    
-    //~ float y_coefs[10] = { 2.56f, 0.0f, 0.0f, 0.0f, 0.0f, -0.654f, 0.956f, -0.599f, 0.185f, -0.023f};
-    //~ float yv_coefs[9] = { 1.0f*0.0f, 2.0f*0.0f, 3.0f*0.0f, 4.0f*0.0f, 5.0f*-0.654f, 6.0f*0.956f, 7.0f*-0.599f, 8.0f*0.185f, 9.0f*-0.023f};
-    //~ float ya_coefs[8] = { 1.0f*2.0f*0.0f, 2.0f*3.0f*0.0f, 3.0f*4.0f*0.0f, 4.0f*5.0f*-0.654f, 5.0f*6.0f*0.956f, 6.0f*7.0f*-0.599f, 7.0f*8.0f*0.185f, 8.0f*9.0f*-0.023f};
-    
-    //~ float z_coefs[10] = { -1.5f, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-    //~ float zv_coefs[9] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-    //~ float za_coefs[8] = { 0, 0, 0, 0, 0, 0, 0, 0};
-    
-    //~ float yaw_coefs[10] = { -1.68f, 0, 0, 0, 0, 0, 0, 0, 0, 0 }; 
-    //~ float yawv_coefs[9] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 }; 
-    //~ float yawa_coefs[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; 
-    
-    //~ float poly_term_t = 1.5611f;
-    
-    // Type defs
-    //~ typedef std::vector< std::vector<float> >::size_type vecf2d_sz;
-    //~ typedef std::vector<float>::size_type vecf_sz; 
-    
     int _n_spline_seg;
     int _n_poly_coef;
     
     // time vectors
     std::vector<float> _spline_delt_sec; // time step sizes for each segment
     std::vector<float> _spline_cumt_sec; // cumulative time markers for each segment
-    
-    // coefficient vectors
-    //~ float x_coefs_arr[n_spline_seg*n_poly_deg] = 
-        //~ { 1.63f, 0.0f, 0.0f, 0.0f, 0.0f, 2.15f, -3.78f, 2.65f, -0.876f, 0.114f, 
-        //~ 0.043f, -0.901f, -0.056f, 0.926f, -1.20f, 1.73f, -1.51f, 0.613f, -0.092f};
-    //~ float y_coefs_arr[n_spline_seg*n_poly_deg] = 
-        //~ { 1.63f, 0.0f, 0.0f, 0.0f, 0.0f, 2.15f, -3.78f, 2.65f, -0.876f, 0.114f, 
-        //~ 0.043f, -0.901f, -0.056f, 0.926f, -1.20f, 1.73f, -1.51f, 0.613f, -0.092f};
-    //~ float z_coefs_arr[n_spline_seg*n_poly_deg] = 
-        //~ { 1.63f, 0.0f, 0.0f, 0.0f, 0.0f, 2.15f, -3.78f, 2.65f, -0.876f, 0.114f, 
-        //~ 0.043f, -0.901f, -0.056f, 0.926f, -1.20f, 1.73f, -1.51f, 0.613f, -0.092f};
-    //~ float yaw_coefs_arr[n_spline_seg*n_poly_deg] = 
-        //~ { 1.63f, 0.0f, 0.0f, 0.0f, 0.0f, 2.15f, -3.78f, 2.65f, -0.876f, 0.114f, 
-        //~ 0.043f, -0.901f, -0.056f, 0.926f, -1.20f, 1.73f, -1.51f, 0.613f, -0.092f};
 
     // initialize vector of appropriate size
     std::vector< std::vector<float> > _x_coefs;
@@ -282,49 +225,6 @@ private:
     std::vector< std::vector<float> > _xa_coefs;
     std::vector< std::vector<float> > _ya_coefs;
     std::vector< std::vector<float> > _za_coefs;
-        
-    //~ for (vecf2d_sz row = 0; row != n_spline_seg; ++row){
-        //~ for (vecf_sz col = 0; col != n_poly_deg; ++col){
-            //~ x_coefs.at(row).at(col) = x_coef_arr[col + row*n_poly_deg];
-            //~ y_coefs.at(row).at(col) = y_coef_arr[col + row*n_poly_deg];
-            //~ z_coefs.at(row).at(col) = z_coef_arr[col + row*n_poly_deg];
-            //~ yaw_coefs.at(row).at(col) = yaw_coef_arr[col + row*n_poly_deg];
-        //~ }
-    //~ }
-    //~ x_coefs.push_back(1.63f);
-    //~ x_coefs.push_back(0.0f);
-    //~ x_coefs.push_back(0.0f);
-    //~ x_coefs.push_back(0.0f);
-    //~ x_coefs.push_back(0.0f);
-    //~ x_coefs.push_back(2.15f);
-    //~ x_coefs.push_back(-3.78f);
-    //~ x_coefs.push_back(2.65f);
-    //~ x_coefs.push_back(-0.876f);
-    //~ x_coefs.push_back(0.114f);
-    //~ x_coefs.push_back(0.043f);
-    //~ x_coefs.push_back(-0.901f);
-    //~ x_coefs.push_back(-0.056f);
-    //~ x_coefs.push_back(0.926f);
-    //~ x_coefs.push_back(-1.20f);
-    //~ x_coefs.push_back(1.73f);
-    //~ x_coefs.push_back(-1.51f);
-    //~ x_coefs.push_back(0.613f);
-    //~ x_coefs.push_back(-0.092f);
-    
-    //~ float y_coefs_arr[n_spline_seg*n_poly_deg] = 
-        //~ { 1.63f, 0.0f, 0.0f, 0.0f, 0.0f, 2.15f, -3.78f, 2.65f, -0.876f, 0.114f, 
-        //~ 0.043f, -0.901f, -0.056f, 0.926f, -1.20f, 1.73f, -1.51f, 0.613f, -0.092f};
-    //~ std::vector<float> x_coefs (y_coefs_arr, y_coefs_arr + sizeof(y_coefs_arr)/sizeof(float));
-    //~ 
-    //~ float z_coefs_arr[n_spline_seg*n_poly_deg] = 
-        //~ { 1.63f, 0.0f, 0.0f, 0.0f, 0.0f, 2.15f, -3.78f, 2.65f, -0.876f, 0.114f, 
-        //~ 0.043f, -0.901f, -0.056f, 0.926f, -1.20f, 1.73f, -1.51f, 0.613f, -0.092f};
-    //~ std::vector<float> z_coefs (z_coefs_arr, z_coefs_arr + sizeof(z_coefs_arr)/sizeof(float));
-    //~ 
-    //~ float yaw_coefs_arr[n_spline_seg*n_poly_deg] = 
-        //~ { 1.63f, 0.0f, 0.0f, 0.0f, 0.0f, 2.15f, -3.78f, 2.65f, -0.876f, 0.114f, 
-        //~ 0.043f, -0.901f, -0.056f, 0.926f, -1.20f, 1.73f, -1.51f, 0.613f, -0.092f};
-    //~ std::vector<float> yaw_coefs (yaw_coefs_arr, yaw_coefs_arr + sizeof(yaw_coefs_arr)/sizeof(float));
     
 
 	/**
@@ -984,59 +884,6 @@ MulticopterPositionControl::control_periodic_trajectory(float t, float dt)
 }
 
 /* Added by Ross Allen */
-//~ void
-//~ MulticopterPositionControl::control_polynomial_trajectory(float t, float start_t, float dt)
-//~ {
-    //~ int fsize = sizeof(float);
-    //~ float cur_poly_t = t - start_t;
-    //~ 
-    //~ if (cur_poly_t <= 0) {
-        //~ 
-        //~ _pos_sp(0) = poly_eval(x_coefs, sizeof(x_coefs)/fsize-1, 0.0f);
-        //~ _pos_sp(1) = poly_eval(y_coefs, sizeof(y_coefs)/fsize-1, 0.0f);
-        //~ _pos_sp(2) = poly_eval(z_coefs, sizeof(z_coefs)/fsize-1, 0.0f);
-        //~ 
-        //~ _vel_ff(0) = 0.0f;
-        //~ _vel_ff(1) = 0.0f;
-        //~ _vel_ff(2) = 0.0f;
-        //~ 
-        //~ _acc_ff(0) = 0.0f;
-        //~ _acc_ff(1) = 0.0f;
-        //~ _acc_ff(2) = 0.0f;
-        //~ 
-    //~ } else if (cur_poly_t > 0 && cur_poly_t < poly_term_t) {
-    //~ 
-        //~ _pos_sp(0) = poly_eval(x_coefs, sizeof(x_coefs)/fsize-1, cur_poly_t);
-        //~ _pos_sp(1) = poly_eval(y_coefs, sizeof(y_coefs)/fsize-1, cur_poly_t);
-        //~ _pos_sp(2) = poly_eval(z_coefs, sizeof(z_coefs)/fsize-1, cur_poly_t);
-        //~ _att_sp.yaw_body = poly_eval(yaw_coefs, sizeof(yaw_coefs)/fsize-1, cur_poly_t);
-        //~ 
-        //~ _vel_ff(0) = poly_eval(xv_coefs, sizeof(xv_coefs)/fsize-1, cur_poly_t);
-        //~ _vel_ff(1) = poly_eval(yv_coefs, sizeof(yv_coefs)/fsize-1, cur_poly_t);
-        //~ _vel_ff(2) = poly_eval(zv_coefs, sizeof(zv_coefs)/fsize-1, cur_poly_t);
-        //~ 
-        //~ _acc_ff(0) = poly_eval(xa_coefs, sizeof(xa_coefs)/fsize-1, cur_poly_t);
-        //~ _acc_ff(1) = poly_eval(ya_coefs, sizeof(ya_coefs)/fsize-1, cur_poly_t);
-        //~ _acc_ff(2) = poly_eval(za_coefs, sizeof(za_coefs)/fsize-1, cur_poly_t);
-    //~ 
-    //~ } else {
-        //~ 
-        //~ _pos_sp(0) = poly_eval(x_coefs, sizeof(x_coefs)/fsize-1, poly_term_t);
-        //~ _pos_sp(1) = poly_eval(y_coefs, sizeof(y_coefs)/fsize-1, poly_term_t);
-        //~ _pos_sp(2) = poly_eval(z_coefs, sizeof(z_coefs)/fsize-1, poly_term_t);
-        //~ 
-        //~ _vel_ff(0) = 0.0f;
-        //~ _vel_ff(1) = 0.0f;
-        //~ _vel_ff(2) = 0.0f;
-        //~ 
-        //~ _acc_ff(0) = 0.0f;
-        //~ _acc_ff(1) = 0.0f;
-        //~ _acc_ff(2) = 0.0f;
-        //~ 
-    //~ }
-//~ }
-
-/* Added by Ross Allen */
 void
 MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
 {
@@ -1106,23 +953,6 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
     
 }
 
-/* Added by Ross Allen */
-// NOTE: becareful when calling, there is no check to make sure we are
-//      calling out of range of array
-// TODO: remove later in favor of vector implementation
-//~ float
-//~ MulticopterPositionControl::poly_eval(const float coefs[], int deg, float t)
-//~ {
-    //~ 
-    //~ float p = coefs[deg];    // return value
-    //~ 
-    //~ for(int i = deg-1; i>=0; --i){
-        //~ // Calculate with Horner's Rule
-        //~ p = p*t + coefs[i];
-    //~ }
-    //~ 
-    //~ return p;
-//~ }
 
 float
 MulticopterPositionControl::poly_eval(const std::vector<float>& coefs, float t)
