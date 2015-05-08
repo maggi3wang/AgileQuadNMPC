@@ -166,6 +166,10 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
         _t_last_vicon = hrt_absolute_time();
 		handle_message_vicon_position_estimate(msg, true);
 		break;
+        
+    case MAVLINK_MSG_ID_POLY_COEFS:
+		handle_message_poly_coefs(msg);
+		break;
 
 	case MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED:
 		handle_message_set_position_target_local_ned(msg);
@@ -498,6 +502,12 @@ MavlinkReceiver::handle_message_vicon_position_estimate(mavlink_message_t *msg, 
 	} else {
 		orb_publish(ORB_ID(vehicle_vicon_position), _vicon_position_pub, &vicon_position);
 	}
+}
+
+void
+MavlinkReceiver::handle_message_poly_coefs(mavlink_message_t *msg)
+{
+    
 }
 
 void
