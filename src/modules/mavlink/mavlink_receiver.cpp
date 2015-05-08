@@ -168,6 +168,7 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 		break;
         
     case MAVLINK_MSG_ID_POLY_COEFS:
+        //~ printf("DEBUG: poly coefs message recieved");
 		handle_message_poly_coefs(msg);
 		break;
 
@@ -507,6 +508,11 @@ MavlinkReceiver::handle_message_vicon_position_estimate(mavlink_message_t *msg, 
 void
 MavlinkReceiver::handle_message_poly_coefs(mavlink_message_t *msg)
 {
+    /* decode message */
+    mavlink_poly_coefs_t m_coefs;
+    mavlink_msg_poly_coefs_decode(msg, &m_coefs);
+    
+    //~ printf("DEBUG: p_4 = %d\n", (int)(1000.0f*m_coefs.p_4));
     
 }
 
