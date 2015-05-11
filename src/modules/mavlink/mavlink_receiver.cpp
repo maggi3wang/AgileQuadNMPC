@@ -114,6 +114,7 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 	_force_sp_pub(-1),
 	_pos_sp_triplet_pub(-1),
 	_vicon_position_pub(-1),
+    _poly_coefs_pub(-1),
 	_vision_position_pub(-1),
 	_telemetry_status_pub(-1),
 	_rc_pub(-1),
@@ -509,10 +510,32 @@ void
 MavlinkReceiver::handle_message_poly_coefs(mavlink_message_t *msg)
 {
     /* decode message */
-    mavlink_poly_coefs_t m_coefs;
-    mavlink_msg_poly_coefs_decode(msg, &m_coefs);
+    mavlink_poly_coefs_t mav_coefs;
+    mavlink_msg_poly_coefs_decode(msg, &mav_coefs);
     
-    //~ printf("DEBUG: p_4 = %d\n", (int)(1000.0f*m_coefs.p_4));
+    /* create structure to pass with uORB */
+    struct poly_coefs_s uorb_coefs;
+    memset(&uorb_coefs, 0, sizeof(uorb_coefs));
+    
+    uorb_coefs.del_t = mav_coefs.del_t;
+    uorb_coefs.p_0   = mav_coefs.p_0;
+    uorb_coefs.p_1   = mav_coefs.p_1;
+    uorb_coefs.p_2   = mav_coefs.p_2;
+    uorb_coefs.p_3   = mav_coefs.p_3;
+    uorb_coefs.p_4   = mav_coefs.p_4;
+    uorb_coefs.p_5   = mav_coefs.p_5;
+    uorb_coefs.p_6   = mav_coefs.p_6;
+    uorb_coefs.p_7   = mav_coefs.p_7;
+    uorb_coefs.p_8   = mav_coefs.p_8;
+    uorb_coefs.p_9   = mav_coefs.p_9;
+    
+    /* advertise or publish topic */
+    if (_poly_coefs_pub < 0) {
+		_poly_coefs_pub = orb_advertise(ORB_ID(poly_coefs), &uorb_coefs);
+
+	} else {
+		orb_publish(ORB_ID(poly_coefs), _poly_coefs_pub, &uorb_coefs);
+	}
     
 }
 
