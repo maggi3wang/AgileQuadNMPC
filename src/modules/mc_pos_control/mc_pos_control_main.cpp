@@ -1206,6 +1206,7 @@ MulticopterPositionControl::task_main()
 	math::Matrix<3, 3> R;
 	R.identity();
     
+    /**************** OVERWRITE LATER*****************************/
     /* initialize spline information */
     
     typedef std::vector<float>::size_type vecf_sz;
@@ -1257,6 +1258,7 @@ MulticopterPositionControl::task_main()
             _yaw_coefs.at(row).at(col) = yaw_coefs_arr[col + row*_n_poly_coef];
         }
     }
+    /******************************************************/
 
 	/* wakeup source */
 	struct pollfd fds[1];

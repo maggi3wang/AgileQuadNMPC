@@ -2191,63 +2191,103 @@ set_main_state_rc(struct vehicle_status_s *status_local, struct manual_control_s
 		// TRANSITION_DENIED is not possible here
 		break;
 
-	case SWITCH_POS_ON:			// AUTO
-		if (sp_man->return_switch == SWITCH_POS_ON) {
-			res = main_state_transition(status_local, MAIN_STATE_AUTO_RTL);
-
-			if (res != TRANSITION_DENIED) {
-				break;	// changed successfully or already in this state
-			}
-
-			print_reject_mode(status_local, "AUTO_RTL");
-
-			// fallback to LOITER if home position not set
-			res = main_state_transition(status_local, MAIN_STATE_AUTO_LOITER);
-
-			if (res != TRANSITION_DENIED) {
-				break;  // changed successfully or already in this state
-			}
-
-		} else if (sp_man->loiter_switch == SWITCH_POS_ON) {
-			res = main_state_transition(status_local, MAIN_STATE_AUTO_LOITER);
-
-			if (res != TRANSITION_DENIED) {
-				break;	// changed successfully or already in this state
-			}
-
-			print_reject_mode(status_local, "AUTO_LOITER");
-
-		} else {
+	case SWITCH_POS_ON:			// ASL_TRAJCTL or POSCTL or ALTCTL on MANUAL
+    
+        /* transition to trajctl if inside and valid, transition to posctl if outside  - Ross Allen*/
+        if (status_local->condition_vicon_position_valid) {
             
-            /* transition to trajctl if inside and valid, transition to auto mission if outside  - Ross Allen*/
-            if (status_local->condition_vicon_position_valid) {
-                
-                res = main_state_transition(status_local, MAIN_STATE_ASL_TRAJCTL);
-                
-                if (res != TRANSITION_DENIED) {
-                    break;	// changed successfully or already in this state
-                }
-
-                print_reject_mode(status_local, "ASL_TRAJCTL");
-                
-            } else {
-                
-                res = main_state_transition(status_local, MAIN_STATE_AUTO_MISSION);
-
-                if (res != TRANSITION_DENIED) {
-                    break;	// changed successfully or already in this state
-                }
-
-                print_reject_mode(status_local, "AUTO_MISSION");
-
-                // fallback to LOITER if home position not set
-                res = main_state_transition(status_local, MAIN_STATE_AUTO_LOITER);
-
-                if (res != TRANSITION_DENIED) {
-                    break;  // changed successfully or already in this state
-                }
+            res = main_state_transition(status_local, MAIN_STATE_ASL_TRAJCTL);
+            
+            if (res != TRANSITION_DENIED) {
+                break;	// changed successfully or already in this state
             }
-		}
+
+            print_reject_mode(status_local, "ASL_TRAJCTL");
+            
+        } else {
+            
+            /* if outside (no vicon lock), transition to posctl */
+            res = main_state_transition(status_local, MAIN_STATE_POSCTL);
+
+            if (res != TRANSITION_DENIED) {
+                break;	// changed successfully or already in this state
+            }
+
+            print_reject_mode(status_local, "POSCTL");
+
+            // fallback to ALTCTL
+            res = main_state_transition(status_local, MAIN_STATE_ALTCTL);
+
+            if (res != TRANSITION_DENIED) {
+                break;	// changed successfully or already in this mode
+            }
+
+            if (sp_man->posctl_switch != SWITCH_POS_ON) {
+                print_reject_mode(status_local, "ALTCTL");
+            }
+
+            // fallback to MANUAL
+            res = main_state_transition(status_local, MAIN_STATE_MANUAL);
+            // TRANSITION_DENIED is not possible here
+            break;
+            
+        }
+		//~ if (sp_man->return_switch == SWITCH_POS_ON) {
+			//~ res = main_state_transition(status_local, MAIN_STATE_AUTO_RTL);
+//~ 
+			//~ if (res != TRANSITION_DENIED) {
+				//~ break;	// changed successfully or already in this state
+			//~ }
+//~ 
+			//~ print_reject_mode(status_local, "AUTO_RTL");
+//~ 
+			//~ // fallback to LOITER if home position not set
+			//~ res = main_state_transition(status_local, MAIN_STATE_AUTO_LOITER);
+//~ 
+			//~ if (res != TRANSITION_DENIED) {
+				//~ break;  // changed successfully or already in this state
+			//~ }
+//~ 
+		//~ } else if (sp_man->loiter_switch == SWITCH_POS_ON) {
+			//~ res = main_state_transition(status_local, MAIN_STATE_AUTO_LOITER);
+//~ 
+			//~ if (res != TRANSITION_DENIED) {
+				//~ break;	// changed successfully or already in this state
+			//~ }
+//~ 
+			//~ print_reject_mode(status_local, "AUTO_LOITER");
+//~ 
+		//~ } else {
+            //~ 
+            //~ /* transition to trajctl if inside and valid, transition to auto mission if outside  - Ross Allen*/
+            //~ if (status_local->condition_vicon_position_valid) {
+                //~ 
+                //~ res = main_state_transition(status_local, MAIN_STATE_ASL_TRAJCTL);
+                //~ 
+                //~ if (res != TRANSITION_DENIED) {
+                    //~ break;	// changed successfully or already in this state
+                //~ }
+//~ 
+                //~ print_reject_mode(status_local, "ASL_TRAJCTL");
+                //~ 
+            //~ } else {
+                //~ 
+                //~ res = main_state_transition(status_local, MAIN_STATE_AUTO_MISSION);
+//~ 
+                //~ if (res != TRANSITION_DENIED) {
+                    //~ break;	// changed successfully or already in this state
+                //~ }
+//~ 
+                //~ print_reject_mode(status_local, "AUTO_MISSION");
+//~ 
+                //~ // fallback to LOITER if home position not set
+                //~ res = main_state_transition(status_local, MAIN_STATE_AUTO_LOITER);
+//~ 
+                //~ if (res != TRANSITION_DENIED) {
+                    //~ break;  // changed successfully or already in this state
+                //~ }
+            //~ }
+		//~ }
 
 		// fallback to POSCTL
 		res = main_state_transition(status_local, MAIN_STATE_POSCTL);
