@@ -87,7 +87,7 @@
 #define ASL_LAB_CENTER_Z    -1.5f
 #define ASL_LAB_CENTER_YAW  -1.68f
 
-#define SPLINE_START_DELAY 5000000
+#define SPLINE_START_DELAY 10000000
 
 
 /**
