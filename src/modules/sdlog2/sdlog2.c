@@ -1060,7 +1060,9 @@ int sdlog2_thread_main(int argc, char *argv[])
 	subs.airspeed_sub = orb_subscribe(ORB_ID(airspeed));
 	subs.esc_sub = orb_subscribe(ORB_ID(esc_status));
 	subs.global_vel_sp_sub = orb_subscribe(ORB_ID(vehicle_global_velocity_setpoint));
-    subs.vel_ff_sub = orb_subscribe(ORB_ID(vehicle_velocity_feed_forward));
+    //~ warnx("DEBUG001: attempting subscription");
+    //~ subs.vel_ff_sub = orb_subscribe(ORB_ID(vehicle_velocity_feed_forward));
+    //~ warnx("DEBUG002: subscription complete");
 	subs.battery_sub = orb_subscribe(ORB_ID(battery_status));
 	for (int i = 0; i < TELEMETRY_STATUS_ORB_ID_NUM; i++) {
 		subs.telemetry_subs[i] = orb_subscribe(telemetry_status_orb_id[i]);
@@ -1558,13 +1560,13 @@ int sdlog2_thread_main(int argc, char *argv[])
         
         /* --- VELOCITY FEED FORWARD --- */
         // Added by Ross Allen
-        if (copy_if_updated(ORB_ID(vehicle_velocity_feed_forward), subs.vel_ff_sub, &buf.vel_ff)) {
-            log_msg.msg_type = LOG_VELF_MSG;
-            log_msg.body.log_VELF.vx = buf.vel_ff.vx;
-            log_msg.body.log_VELF.vy = buf.vel_ff.vy;
-            log_msg.body.log_VELF.vz = buf.vel_ff.vz;
-            LOGBUFFER_WRITE_AND_COUNT(VELF);
-        }
+        //~ if (copy_if_updated(ORB_ID(vehicle_velocity_feed_forward), subs.vel_ff_sub, &buf.vel_ff)) {
+            //~ log_msg.msg_type = LOG_VELF_MSG;
+            //~ log_msg.body.log_VELF.vx = buf.vel_ff.vx;
+            //~ log_msg.body.log_VELF.vy = buf.vel_ff.vy;
+            //~ log_msg.body.log_VELF.vz = buf.vel_ff.vz;
+            //~ LOGBUFFER_WRITE_AND_COUNT(VELF);
+        //~ }
 
 		/* --- BATTERY --- */
 		if (copy_if_updated(ORB_ID(battery_status), subs.battery_sub, &buf.battery)) {
