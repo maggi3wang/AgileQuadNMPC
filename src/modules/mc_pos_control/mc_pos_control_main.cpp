@@ -66,6 +66,7 @@
 #include <uORB/topics/vehicle_local_position.h>
 #include <uORB/topics/position_setpoint_triplet.h>
 #include <uORB/topics/vehicle_global_velocity_setpoint.h>
+#include <uORB/topics/vehicle_velocity_feed_forward.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
 #include <systemlib/param/param.h>
 #include <systemlib/err.h>
@@ -138,6 +139,7 @@ private:
 	orb_advert_t	_att_sp_pub;			/**< attitude setpoint publication */
 	orb_advert_t	_local_pos_sp_pub;		/**< vehicle local position setpoint publication */
 	orb_advert_t	_global_vel_sp_pub;		/**< vehicle global velocity setpoint publication */
+    orb_advert_t    _vel_ff_uorb_pub;       /**< vehicle velocity feed forward publication */
 
 	struct vehicle_attitude_s			_att;			/**< vehicle attitude */
 	struct vehicle_attitude_setpoint_s		_att_sp;		/**< vehicle attitude setpoint */
@@ -148,6 +150,7 @@ private:
 	struct position_setpoint_triplet_s		_pos_sp_triplet;	/**< vehicle global position setpoint triplet */
 	struct vehicle_local_position_setpoint_s	_local_pos_sp;		/**< vehicle local position setpoint */
 	struct vehicle_global_velocity_setpoint_s	_global_vel_sp;	/**< vehicle global velocity setpoint */
+    struct vehicle_velocity_feed_forward_s      _vel_ff_uorb;   /**< vehicle velocity feed forward term */
 
 
 	struct {
@@ -346,6 +349,7 @@ MulticopterPositionControl::MulticopterPositionControl() :
 	_att_sp_pub(-1),
 	_local_pos_sp_pub(-1),
 	_global_vel_sp_pub(-1),
+    _vel_ff_uorb_pub(-1),
 
 	_ref_alt(0.0f),
 	_ref_timestamp(0),
@@ -363,6 +367,7 @@ MulticopterPositionControl::MulticopterPositionControl() :
 	memset(&_pos_sp_triplet, 0, sizeof(_pos_sp_triplet));
 	memset(&_local_pos_sp, 0, sizeof(_local_pos_sp));
 	memset(&_global_vel_sp, 0, sizeof(_global_vel_sp));
+    memset(&_vel_ff_uorb, 0, sizeof(_vel_ff_uorb));
 
 	memset(&_ref_pos, 0, sizeof(_ref_pos));
 
@@ -1412,7 +1417,20 @@ MulticopterPositionControl::task_main()
 				math::Vector<3> pos_err = _pos_sp - _pos;
 
 				_vel_sp = pos_err.emult(_params.pos_p) + _vel_ff;
+                
+                /* publish velocity feed forward term */
+                // Added by Ross Allen
+                _vel_ff_uorb.vx = _vel_ff(0);
+                _vel_ff_uorb.vy = _vel_ff(1);
+                _vel_ff_uorb.vz = _vel_ff(2);
+                
+                if (_vel_ff_uorb_pub > 0) {
+                    orb_publish(ORB_ID(vehicle_velocity_feed_forward), _vel_ff_uorb_pub, &_vel_ff_uorb);
+                } else {
+                    _vel_ff_uorb_pub = orb_advertise(ORB_ID(vehicle_velocity_feed_forward), &_vel_ff_uorb);
+                }
 
+                /* enforce setpoint behavior for certain flags */
 				if (!_control_mode.flag_control_altitude_enabled) {
 					_reset_alt_sp = true;
 					_vel_sp(2) = 0.0f;

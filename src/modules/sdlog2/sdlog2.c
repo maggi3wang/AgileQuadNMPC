@@ -78,6 +78,7 @@
 #include <uORB/topics/vehicle_vicon_position.h>
 #include <uORB/topics/vision_position_estimate.h>
 #include <uORB/topics/vehicle_global_velocity_setpoint.h>
+#include <uORB/topics/vehicle_velocity_feed_forward.h>
 #include <uORB/topics/optical_flow.h>
 #include <uORB/topics/battery_status.h>
 #include <uORB/topics/differential_pressure.h>
@@ -945,6 +946,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 		struct airspeed_s airspeed;
 		struct esc_status_s esc;
 		struct vehicle_global_velocity_setpoint_s global_vel_sp;
+        struct vehicle_velocity_feed_forward_s vel_ff;
 		struct battery_status_s battery;
 		struct telemetry_status_s telemetry;
 		struct range_finder_report range_finder;
@@ -982,6 +984,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 			struct log_GPSP_s log_GPSP;
 			struct log_ESC_s log_ESC;
 			struct log_GVSP_s log_GVSP;
+            struct log_VELF_s log_VELF;
 			struct log_BATT_s log_BATT;
 			struct log_DIST_s log_DIST;
 			struct log_TEL_s log_TEL;
@@ -1025,6 +1028,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 		int airspeed_sub;
 		int esc_sub;
 		int global_vel_sp_sub;
+        int vel_ff_sub;
 		int battery_sub;
 		int telemetry_subs[TELEMETRY_STATUS_ORB_ID_NUM];
 		int range_finder_sub;
@@ -1056,6 +1060,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 	subs.airspeed_sub = orb_subscribe(ORB_ID(airspeed));
 	subs.esc_sub = orb_subscribe(ORB_ID(esc_status));
 	subs.global_vel_sp_sub = orb_subscribe(ORB_ID(vehicle_global_velocity_setpoint));
+    subs.vel_ff_sub = orb_subscribe(ORB_ID(vehicle_velocity_feed_forward));
 	subs.battery_sub = orb_subscribe(ORB_ID(battery_status));
 	for (int i = 0; i < TELEMETRY_STATUS_ORB_ID_NUM; i++) {
 		subs.telemetry_subs[i] = orb_subscribe(telemetry_status_orb_id[i]);
@@ -1550,6 +1555,16 @@ int sdlog2_thread_main(int argc, char *argv[])
 			log_msg.body.log_GVSP.vz = buf.global_vel_sp.vz;
 			LOGBUFFER_WRITE_AND_COUNT(GVSP);
 		}
+        
+        /* --- VELOCITY FEED FORWARD --- */
+        // Added by Ross Allen
+        if (copy_if_updated(ORB_ID(vehicle_velocity_feed_forward), subs.vel_ff_sub, &buf.vel_ff)) {
+            log_msg.msg_type = LOG_VELF_MSG;
+            log_msg.body.log_VELF.vx = buf.vel_ff.vx;
+            log_msg.body.log_VELF.vy = buf.vel_ff.vy;
+            log_msg.body.log_VELF.vz = buf.vel_ff.vz;
+            LOGBUFFER_WRITE_AND_COUNT(VELF);
+        }
 
 		/* --- BATTERY --- */
 		if (copy_if_updated(ORB_ID(battery_status), subs.battery_sub, &buf.battery)) {

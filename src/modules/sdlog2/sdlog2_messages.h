@@ -263,6 +263,15 @@ struct log_GVSP_s {
 	float vz;
 };
 
+/* --- VELF - Velocity Feed Forward --- */
+// Added by Ross Allen
+#define LOG_VELF_MSG 40
+struct log_VELF_s {
+    float vx;
+    float vy;
+    float vz;
+};
+
 /* --- BATT - BATTERY --- */
 #define LOG_BATT_MSG 20
 struct log_BATT_s {
@@ -455,6 +464,7 @@ static const struct log_format_s log_formats[] = {
 	LOG_FORMAT(GPSP, "BLLffBfbf",		"NavState,Lat,Lon,Alt,Yaw,Type,LoitR,LoitDir,PitMin"),
 	LOG_FORMAT(ESC, "HBBBHHffiffH",		"count,nESC,Conn,N,Ver,Adr,Volt,Amp,RPM,Temp,SetP,SetPRAW"),
 	LOG_FORMAT(GVSP, "fff",			"VX,VY,VZ"),
+    LOG_FORMAT(VELF, "fff",			"VX,VY,VZ"),    // Added by Ross Allen
 	LOG_FORMAT(BATT, "ffff",		"V,VFilt,C,Discharged"),
 	LOG_FORMAT(DIST, "ffB",			"Bottom,BottomRate,Flags"),
 	LOG_FORMAT_S(TEL0, TEL, "BBBBHHBQ",		"RSSI,RemRSSI,Noise,RemNoise,RXErr,Fixed,TXBuf,HbTime"),
