@@ -1061,7 +1061,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 	subs.esc_sub = orb_subscribe(ORB_ID(esc_status));
 	subs.global_vel_sp_sub = orb_subscribe(ORB_ID(vehicle_global_velocity_setpoint));
     //~ warnx("DEBUG001: attempting subscription");
-    subs.vel_ff_sub = orb_subscribe(ORB_ID(vehicle_velocity_feed_forward));
+    //~ subs.vel_ff_sub = orb_subscribe(ORB_ID(vehicle_velocity_feed_forward));
     //~ subs.vel_ff_sub = -1;
     //~ warnx("DEBUG002: subscription complete");
 	subs.battery_sub = orb_subscribe(ORB_ID(battery_status));
