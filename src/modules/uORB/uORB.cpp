@@ -41,6 +41,7 @@
 #include <drivers/device/device.h>
 
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
@@ -926,6 +927,24 @@ node_open(Flavor f, const struct orb_metadata *meta, const void *data, bool adve
 }
 
 } // namespace
+
+int
+orb_exists(const struct orb_metadata *meta)
+{
+	/*
+	 * Generate the path to the node and try to open it.
+	 */
+	char path[orb_maxpath];
+	int ret = node_mkpath(path, PUBSUB, meta);
+
+	if (ret != OK) {
+		errno = -ret;
+		return ERROR;
+	}
+
+	struct stat buffer;
+	return stat(path, &buffer);
+}
 
 orb_advert_t
 orb_advertise(const struct orb_metadata *meta, const void *data)

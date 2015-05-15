@@ -240,6 +240,15 @@ extern int	orb_check(int handle, bool *updated) __EXPORT;
 extern int	orb_stat(int handle, uint64_t *time) __EXPORT;
 
 /**
+ * Check if a topic has already been created.
+ *
+ * @param meta		ORB topic metadata.
+ * @param instance	ORB instance
+ * @return		OK if the topic exists, ERROR otherwise with errno set accordingly.
+ */
+extern int	orb_exists(const struct orb_metadata *meta) __EXPORT;
+
+/**
  * Set the minimum interval between which updates are seen for a subscription.
  *
  * If this interval is set, the subscriber will not see more than one update
