@@ -946,7 +946,6 @@ int sdlog2_thread_main(int argc, char *argv[])
 		struct airspeed_s airspeed;
 		struct esc_status_s esc;
 		struct vehicle_global_velocity_setpoint_s global_vel_sp;
-        struct vehicle_velocity_feed_forward_s vel_ff;
 		struct battery_status_s battery;
 		struct telemetry_status_s telemetry;
 		struct range_finder_report range_finder;
@@ -956,6 +955,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 		struct servorail_status_s servorail_status;
 		struct satellite_info_s sat_info;
 		struct wind_estimate_s wind_estimate;
+        struct vehicle_velocity_feed_forward_s vel_ff;
 	} buf;
 
 	memset(&buf, 0, sizeof(buf));
@@ -984,7 +984,6 @@ int sdlog2_thread_main(int argc, char *argv[])
 			struct log_GPSP_s log_GPSP;
 			struct log_ESC_s log_ESC;
 			struct log_GVSP_s log_GVSP;
-            struct log_VELF_s log_VELF;
 			struct log_BATT_s log_BATT;
 			struct log_DIST_s log_DIST;
 			struct log_TEL_s log_TEL;
@@ -999,6 +998,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 			struct log_GS1B_s log_GS1B;
 			struct log_TECS_s log_TECS;
 			struct log_WIND_s log_WIND;
+            struct log_VELF_s log_VELF;
 		} body;
 	} log_msg = {
 		LOG_PACKET_HEADER_INIT(0)
@@ -1028,7 +1028,6 @@ int sdlog2_thread_main(int argc, char *argv[])
 		int airspeed_sub;
 		int esc_sub;
 		int global_vel_sp_sub;
-        int vel_ff_sub;
 		int battery_sub;
 		int telemetry_subs[TELEMETRY_STATUS_ORB_ID_NUM];
 		int range_finder_sub;
@@ -1037,6 +1036,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 		int system_power_sub;
 		int servorail_status_sub;
 		int wind_sub;
+        int vel_ff_sub;
 	} subs;
 
 	subs.cmd_sub = orb_subscribe(ORB_ID(vehicle_command));
@@ -1061,7 +1061,8 @@ int sdlog2_thread_main(int argc, char *argv[])
 	subs.esc_sub = orb_subscribe(ORB_ID(esc_status));
 	subs.global_vel_sp_sub = orb_subscribe(ORB_ID(vehicle_global_velocity_setpoint));
     //~ warnx("DEBUG001: attempting subscription");
-    //~ subs.vel_ff_sub = orb_subscribe(ORB_ID(vehicle_velocity_feed_forward));
+    subs.vel_ff_sub = orb_subscribe(ORB_ID(vehicle_velocity_feed_forward));
+    //~ subs.vel_ff_sub = -1;
     //~ warnx("DEBUG002: subscription complete");
 	subs.battery_sub = orb_subscribe(ORB_ID(battery_status));
 	for (int i = 0; i < TELEMETRY_STATUS_ORB_ID_NUM; i++) {
@@ -1109,8 +1110,9 @@ int sdlog2_thread_main(int argc, char *argv[])
 
 		sdlog2_start_log();
 	}
-
+    
 	while (!main_thread_should_exit) {
+        
 		usleep(sleep_delay);
 
 		/* --- VEHICLE COMMAND - LOG MANAGEMENT --- */
@@ -1561,6 +1563,7 @@ int sdlog2_thread_main(int argc, char *argv[])
         /* --- VELOCITY FEED FORWARD --- */
         // Added by Ross Allen
         //~ if (copy_if_updated(ORB_ID(vehicle_velocity_feed_forward), subs.vel_ff_sub, &buf.vel_ff)) {
+            //~ warnx("DEBUG002: updated vel feedforward");
             //~ log_msg.msg_type = LOG_VELF_MSG;
             //~ log_msg.body.log_VELF.vx = buf.vel_ff.vx;
             //~ log_msg.body.log_VELF.vy = buf.vel_ff.vy;
