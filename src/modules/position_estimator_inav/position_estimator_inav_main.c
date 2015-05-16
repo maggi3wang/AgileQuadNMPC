@@ -90,7 +90,7 @@ static const hrt_abstime sonar_valid_timeout = 1000000;	// estimate sonar distan
 static const hrt_abstime xy_src_timeout = 2000000;	// estimate position during this time after position sources loss
 static const uint32_t updates_counter_len = 1000000;
 static const float max_flow = 1.0f;	// max flow value that can be used, rad/s
-static const hrt_abstime vicon_weight_reduction_timeout = 33333;		// vicon weight is reduced if not updated every 1/30 sec
+static const hrt_abstime vicon_weight_reduction_timeout = 33333;		// vicon weight is reduced if not updated every 1/30 sec (hmmm...)
 
 __EXPORT int position_estimator_inav_main(int argc, char *argv[]);
 
