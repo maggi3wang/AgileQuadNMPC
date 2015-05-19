@@ -85,6 +85,7 @@ __BEGIN_DECLS
 __END_DECLS
 
 #define VICON_TOPIC_TIMEOUT 500000  // Vicon times out after 0.5s
+#define MAX_TIMESTAMP_SAMPLES 100
 
 static const float mg2ms2 = CONSTANTS_ONE_G / 1000.0f;
 
@@ -125,8 +126,12 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 	_hil_local_proj_inited(0),
 	_hil_local_alt0(0.0f),
 	_hil_local_proj_ref{},
-    _t_last_vicon(0),
-    _vicon_valid(false)
+    _t_last_vicon_received(0),
+    _vicon_timed_out(true),
+    _n_time_samples(0),
+    _mean_vts_offset(0.0f),     // mean of vicon timestamp offset from vicon sent to pixhawk recieved
+    _M2(0.0f),
+    _stdev_vts_offset(0.0f)     // standard deviation of vicon timestamp offset from vicon sent to pixhawk recieved
 {
 
 	// make sure the FTP server is started
@@ -135,6 +140,28 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 
 MavlinkReceiver::~MavlinkReceiver()
 {
+}
+
+void
+MavlinkReceiver::calc_vicon_timing_metrics(float cur_offset)
+{
+    /* calculate the mean and standard deviation of offset of time
+     * stamps for vicon messages. See 
+     * http://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
+     * section on online algorithms*/
+     
+    // cap the number of samples to adjust to large scale changes in timing
+    if (_n_time_samples < MAX_TIMESTAMP_SAMPLES) {
+        _n_time_samples = _n_time_samples + 1;
+    } 
+    
+    float delta = cur_offset - _mean_vts_offset;
+    _mean_vts_offset = _mean_vts_offset + delta/((float)_n_time_samples);
+    _M2 = _M2 + delta*(cur_offset - _mean_vts_offset);
+    
+    if (_n_time_samples >= 2) {
+        _stdev_vts_offset = sqrt(_M2 + delta/((float)(_n_time_samples-1)));
+    }
 }
 
 void
@@ -163,8 +190,8 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 
 	case MAVLINK_MSG_ID_VICON_POSITION_ESTIMATE:
 		//printf("DEBUG: vicon message recieved\n");
-        _vicon_valid = true;
-        _t_last_vicon = hrt_absolute_time();
+        _vicon_timed_out = false;
+        _t_last_vicon_received = hrt_absolute_time();
 		handle_message_vicon_position_estimate(msg, true);
 		break;
         
@@ -481,20 +508,31 @@ MavlinkReceiver::handle_message_vicon_position_estimate(mavlink_message_t *msg, 
 {
     struct vehicle_vicon_position_s vicon_position;
 	memset(&vicon_position, 0, sizeof(vicon_position));
-    vicon_position.valid = incoming_data;
+
+    vicon_position.valid = false;
     
     /* Pass on incoming data to uORB topic */
     if (incoming_data) {
         mavlink_vicon_position_estimate_t pos;
         mavlink_msg_vicon_position_estimate_decode(msg, &pos);
 
-        vicon_position.timestamp = _t_last_vicon;
+        vicon_position.timestamp = pos.usec;
+        //~ vicon_position.t_vicon_sent = pos.usec;
+        //~ vicon_position.t_pix_received = _t_last_vicon_received;
         vicon_position.x = pos.x;
         vicon_position.y = pos.y;
         vicon_position.z = pos.z;
         vicon_position.roll = pos.roll;
         vicon_position.pitch = pos.pitch;
         vicon_position.yaw = pos.yaw;
+        
+        /* determine if message is valid */
+        float timestamp_offset = (float)(_t_last_vicon_received - pos.usec);
+        calc_vicon_timing_metrics(timestamp_offset);
+        if (_mean_vts_offset - _stdev_vts_offset <= timestamp_offset && 
+            timestamp_offset <= _mean_vts_offset + _stdev_vts_offset){
+                vicon_position.valid = true;
+        }
     
     } /* else there is no data and the vicon data is timed out. publish empty, invalid vicon topic */
 
@@ -1424,8 +1462,8 @@ MavlinkReceiver::receive_thread(void *arg)
 			_mavlink->count_rxbytes(nread);
 		}
         
-        if (_vicon_valid && (t_cur > (_t_last_vicon + VICON_TOPIC_TIMEOUT))) {
-			_vicon_valid = false;
+        if (!_vicon_timed_out && (t_cur > (_t_last_vicon_received + VICON_TOPIC_TIMEOUT))) {
+			_vicon_timed_out = true;
             mavlink_message_t empty_msg;
             handle_message_vicon_position_estimate(&empty_msg, false);
 			warnx("VICON timeout");

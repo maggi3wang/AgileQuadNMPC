@@ -110,6 +110,7 @@ public:
 private:
 	Mavlink	*_mavlink;
 
+    void calc_vicon_timing_metrics(float cur_offset);
 	void handle_message(mavlink_message_t *msg);
 	void handle_message_command_long(mavlink_message_t *msg);
 	void handle_message_command_int(mavlink_message_t *msg);
@@ -167,8 +168,12 @@ private:
 	bool _hil_local_proj_inited;
 	float _hil_local_alt0;
 	struct map_projection_reference_s _hil_local_proj_ref;
-    uint64_t _t_last_vicon;
-    bool _vicon_valid;
+    uint64_t _t_last_vicon_received;
+    bool _vicon_timed_out;
+    uint64_t _n_time_samples;
+    float _mean_vts_offset;
+    float _M2;
+    float _stdev_vts_offset;
     
 
 	/* do not allow copying this class */

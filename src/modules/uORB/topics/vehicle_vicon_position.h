@@ -53,7 +53,9 @@
  * Fused local position in NED.
  */
 struct vehicle_vicon_position_s {
-	uint64_t timestamp;			/**< time of this estimate, in microseconds since system start */
+    uint64_t timestamp;			/**< (microsec) time of message (could be sent or received depending on how it is processed in mavlink_receiver)*/
+	//~ uint64_t time_vicon_sent;			/**< (microsec) time of message sending as recorded by vicon computer */
+    //~ uint64_t time_pix_received;			/**< (microsec) time message was received as recorded by pixhawk computer */
 	bool valid;				/**< true if position satisfies validity criteria of estimator */
 
 	float x;				/**< X positin in meters in NED earth-fixed frame */

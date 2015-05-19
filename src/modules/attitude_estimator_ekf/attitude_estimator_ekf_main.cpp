@@ -238,7 +238,7 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
     
     /* Vicon parameters - Added by Ross Allen */
     bool vicon_valid = false;
-    static const hrt_abstime vicon_topic_timeout = 500000;		// vicon topic timeout = 0.25s
+    //~ static const hrt_abstime vicon_topic_timeout = 500000;		// vicon topic timeout = 0.25s
 
 	/* current velocity */
 	math::Vector<3> vel;
@@ -319,7 +319,7 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
 		int ret = poll(fds, 2, 1000);
         
         /* Added by Ross Allen */
-        hrt_abstime t = hrt_absolute_time();
+        //~ hrt_abstime t = hrt_absolute_time();
         bool updated;
 
 		if (ret < 0) {
@@ -540,7 +540,7 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
 
 					last_data = raw.timestamp;
                     
-                    /* Check Vicon for attitude data and timeout*/
+                    /* Check Vicon for attitude data*/
                     /* Added by Ross Allen */
                     orb_check(vehicle_vicon_position_sub, &updated);
 
@@ -549,10 +549,10 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
                         vicon_valid = vicon_pos.valid;
                     }
                     
-                    if (vicon_valid && (t > (vicon_pos.timestamp + vicon_topic_timeout))) {
-                        vicon_valid = false;
-                        warnx("VICON timeout");
-                    }
+                    //~ if (vicon_valid && (t > (vicon_pos.timestamp + vicon_topic_timeout))) {
+                        //~ vicon_valid = false;
+                        //~ warnx("VICON timeout");
+                    //~ }
 
 					/* send out */
 					att.timestamp = raw.timestamp;
