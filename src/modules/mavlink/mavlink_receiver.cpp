@@ -588,7 +588,7 @@ MavlinkReceiver::handle_message_traj_seg(mavlink_message_t *msg)
     mavlink_traj_seg_t mav_coefs;
     mavlink_msg_traj_seg_decode(msg, &mav_coefs);
     
-    printf("DEBUG: mavlink message received\n");
+    printf("DEBUG: mavlink message received \n");
     
 }
 
