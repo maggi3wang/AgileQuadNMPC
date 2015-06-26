@@ -199,6 +199,10 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
         //~ printf("DEBUG: poly coefs message recieved");
 		handle_message_poly_coefs(msg);
 		break;
+        
+    case MAVLINK_MSG_ID_TRAJ_SEG:
+        handle_message_traj_seg(msg);
+        break;
 
 	case MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED:
 		handle_message_set_position_target_local_ned(msg);
@@ -574,6 +578,17 @@ MavlinkReceiver::handle_message_poly_coefs(mavlink_message_t *msg)
 	} else {
 		orb_publish(ORB_ID(poly_coefs), _poly_coefs_pub, &uorb_coefs);
 	}
+    
+}
+
+void
+MavlinkReceiver::handle_message_traj_seg(mavlink_message_t *msg)
+{
+    /* decode message */
+    mavlink_traj_seg_t mav_coefs;
+    mavlink_msg_traj_seg_decode(msg, &mav_coefs);
+    
+    printf("DEBUG: mavlink message received\n");
     
 }
 
