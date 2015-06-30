@@ -68,6 +68,7 @@
 #include <uORB/topics/vehicle_global_velocity_setpoint.h>
 #include <uORB/topics/vehicle_velocity_feed_forward.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
+#include <uORB/topics/trajectory_spline.h>
 #include <systemlib/param/param.h>
 #include <systemlib/err.h>
 #include <systemlib/systemlib.h>
@@ -216,10 +217,10 @@ private:
     std::vector<float> _spline_cumt_sec; // cumulative time markers for each segment
 
     // initialize vector of appropriate size
-    std::vector< std::vector<float> > _x_coefs;
-    std::vector< std::vector<float> > _y_coefs;
-    std::vector< std::vector<float> > _z_coefs;
-    std::vector< std::vector<float> > _yaw_coefs;
+    //~ std::vector< std::vector<float> > _x_coefs;
+    //~ std::vector< std::vector<float> > _y_coefs;
+    //~ std::vector< std::vector<float> > _z_coefs;
+    //~ std::vector< std::vector<float> > _yaw_coefs;
     
     std::vector< std::vector<float> > _xv_coefs;
     std::vector< std::vector<float> > _yv_coefs;
@@ -608,6 +609,13 @@ MulticopterPositionControl::poll_subscriptions()
 	if (updated) {
 		orb_copy(ORB_ID(vehicle_local_position), _local_pos_sub, &_local_pos);
 	}
+    
+    orb_check(_traj_spline_sub, &updated);
+    
+    if (updated) {
+        orb_copy(ORB_ID(trajectory_spline), _traj_spline_sub, &_traj_spline);
+        _control_trajectory_started = false;
+    }
 }
 
 float
@@ -912,10 +920,15 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
     
     if (cur_spline_t <= 0) {
         
-        _pos_sp(0) = poly_eval(_x_coefs.at(0), 0.0f);
-        _pos_sp(1) = poly_eval(_y_coefs.at(0), 0.0f);
-        _pos_sp(2) = poly_eval(_z_coefs.at(0), 0.0f);
-        _att_sp.yaw_body = poly_eval(_yaw_coefs.at(0), 0.0f);
+        //~ _pos_sp(0) = poly_eval(_x_coefs.at(0), 0.0f);
+        //~ _pos_sp(1) = poly_eval(_y_coefs.at(0), 0.0f);
+        //~ _pos_sp(2) = poly_eval(_z_coefs.at(0), 0.0f);
+        //~ _att_sp.yaw_body = poly_eval(_yaw_coefs.at(0), 0.0f);
+        
+        _pos_sp(0) = poly_eval(_traj_spline.at(0).xCoefs, 0.0f);
+        _pos_sp(1) = poly_eval(_traj_spline.at(0).yCoefs, 0.0f);
+        _pos_sp(2) = poly_eval(_traj_spline.at(0).zCoefs, 0.0f);
+        _att_sp.yaw_body = poly_eval(_traj_spline.at(0).yawCoefs, 0.0f);
         
         _vel_ff(0) = 0.0f;
         _vel_ff(1) = 0.0f;
@@ -927,10 +940,15 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
         
     } else if (cur_spline_t > 0 && cur_spline_t < spline_term_t) {
     
-        _pos_sp(0) = poly_eval(_x_coefs.at(cur_seg), cur_poly_t);
-        _pos_sp(1) = poly_eval(_y_coefs.at(cur_seg), cur_poly_t);
-        _pos_sp(2) = poly_eval(_z_coefs.at(cur_seg), cur_poly_t);
-        _att_sp.yaw_body = poly_eval(_yaw_coefs.at(cur_seg), cur_poly_t);
+        //~ _pos_sp(0) = poly_eval(_x_coefs.at(cur_seg), cur_poly_t);
+        //~ _pos_sp(1) = poly_eval(_y_coefs.at(cur_seg), cur_poly_t);
+        //~ _pos_sp(2) = poly_eval(_z_coefs.at(cur_seg), cur_poly_t);
+        //~ _att_sp.yaw_body = poly_eval(_yaw_coefs.at(cur_seg), cur_poly_t);
+        
+        _pos_sp(0) = poly_eval(_traj_spline.at(cur_seg).xCoefs, cur_poly_t);
+        _pos_sp(1) = poly_eval(_traj_spline.at(cur_seg).yCoefs, cur_poly_t);
+        _pos_sp(2) = poly_eval(_traj_spline.at(cur_seg).zCoefs, cur_poly_t);
+        _att_sp.yaw_body = poly_eval(_traj_spline.at(cur_seg).yawCoefs, cur_poly_t);
         
         _vel_ff(0) = poly_eval(_xv_coefs.at(cur_seg), cur_poly_t);
         _vel_ff(1) = poly_eval(_yv_coefs.at(cur_seg), cur_poly_t);
@@ -942,10 +960,15 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
     
     } else {
         
-        _pos_sp(0) = poly_eval(_x_coefs.at(_x_coefs.size()-1), poly_term_t);
-        _pos_sp(1) = poly_eval(_y_coefs.at(_y_coefs.size()-1), poly_term_t);
-        _pos_sp(2) = poly_eval(_z_coefs.at(_z_coefs.size()-1), poly_term_t);
-        _att_sp.yaw_body = poly_eval(_yaw_coefs.at(_yaw_coefs.size()-1), poly_term_t);
+        //~ _pos_sp(0) = poly_eval(_x_coefs.at(_x_coefs.size()-1), poly_term_t);
+        //~ _pos_sp(1) = poly_eval(_y_coefs.at(_y_coefs.size()-1), poly_term_t);
+        //~ _pos_sp(2) = poly_eval(_z_coefs.at(_z_coefs.size()-1), poly_term_t);
+        //~ _att_sp.yaw_body = poly_eval(_yaw_coefs.at(_yaw_coefs.size()-1), poly_term_t);
+        
+        _pos_sp(0) = poly_eval(_traj_spline.at(_traj_spline.at(0).nSeg-1).xCoefs, poly_term_t);
+        _pos_sp(1) = poly_eval(_traj_spline.at(_traj_spline.at(0).nSeg-1).yCoefs, poly_term_t);
+        _pos_sp(2) = poly_eval(_traj_spline.at(_traj_spline.at(0).nSeg-1).zCoefs, poly_term_t);
+        _att_sp.yaw_body = poly_eval(_traj_spline.at(_traj_spline.at(0).nSeg-1).yawCoefs, poly_term_t);
         
         _vel_ff(0) = 0.0f;
         _vel_ff(1) = 0.0f;
@@ -1218,51 +1241,51 @@ MulticopterPositionControl::task_main()
     typedef std::vector< std::vector<float> >::size_type vecf2d_sz;
     
     // initialize n_deg in a way such that arrays can be init w const values
-    const int n_seg = 2;
-    const int n_coef = 10;
-    _n_spline_seg = n_seg;
-    _n_poly_coef = n_coef;
+    //~ const int n_seg = 2;
+    //~ const int n_coef = 10;
+    //~ _n_spline_seg = n_seg;
+    //~ _n_poly_coef = n_coef;
     
     // time vector
     float spline_start_t_sec;
-    _spline_delt_sec = std::vector<float> (_n_spline_seg, 0.0f); // time step sizes for each segment
-    _spline_delt_sec.at(0) = 1.5611f;
-    _spline_delt_sec.at(1) = 1.6209f;
-    
-    _spline_cumt_sec = std::vector<float> (_n_spline_seg, 0.0f); // cumulative time markers for each segment
+    //~ _spline_delt_sec = std::vector<float> (_n_spline_seg, 0.0f); // time step sizes for each segment
+    //~ _spline_delt_sec.at(0) = 1.5611f;
+    //~ _spline_delt_sec.at(1) = 1.6209f;
+    //~ 
+    //~ _spline_cumt_sec = std::vector<float> (_n_spline_seg, 0.0f); // cumulative time markers for each segment
     
     // coefficient vectors
-    float x_coefs_arr[n_seg*(n_coef+1)] = 
-        { 1.63f, 0.0f, 0.0f, 0.0f, 0.0f, 2.15f, -3.78f, 2.65f, -0.876f, 0.114f, 
-        2.13f, 0.043f, -0.901f, -0.056f, 0.926f, -1.20f, 1.73f, -1.51f, 0.613f, -0.092f};
-    float y_coefs_arr[n_seg*(n_coef+1)] = 
-        { 2.56f, 0.0f, 0.0f, 0.0f, 0.0f, -0.654f, 0.956f, -0.599f, 0.185f, -0.0232f, 
-        2.06, -0.783f, -0.0784f, 0.347f, 0.0652f, -0.350f, 0.527f, -0.460f, 0.192f, -0.0299};
-    float z_coefs_arr[n_seg*(n_coef+1)] = 
-        { -1.50f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 
-        -1.50f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-    float yaw_coefs_arr[n_seg*(n_coef+1)] = 
-        { ASL_LAB_CENTER_YAW, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,  
-        ASL_LAB_CENTER_YAW, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    //~ float x_coefs_arr[n_seg*(n_coef+1)] = 
+        //~ { 1.63f, 0.0f, 0.0f, 0.0f, 0.0f, 2.15f, -3.78f, 2.65f, -0.876f, 0.114f, 
+        //~ 2.13f, 0.043f, -0.901f, -0.056f, 0.926f, -1.20f, 1.73f, -1.51f, 0.613f, -0.092f};
+    //~ float y_coefs_arr[n_seg*(n_coef+1)] = 
+        //~ { 2.56f, 0.0f, 0.0f, 0.0f, 0.0f, -0.654f, 0.956f, -0.599f, 0.185f, -0.0232f, 
+        //~ 2.06, -0.783f, -0.0784f, 0.347f, 0.0652f, -0.350f, 0.527f, -0.460f, 0.192f, -0.0299};
+    //~ float z_coefs_arr[n_seg*(n_coef+1)] = 
+        //~ { -1.50f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 
+        //~ -1.50f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    //~ float yaw_coefs_arr[n_seg*(n_coef+1)] = 
+        //~ { ASL_LAB_CENTER_YAW, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,  
+        //~ ASL_LAB_CENTER_YAW, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 
     // initialize vector of appropriate size
-    _x_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
-        std::vector<float> (_n_poly_coef));
-    _y_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
-        std::vector<float> (_n_poly_coef));
-    _z_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
-        std::vector<float> (_n_poly_coef));
-    _yaw_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
-        std::vector<float> (_n_poly_coef));
+    //~ _x_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
+        //~ std::vector<float> (_n_poly_coef));
+    //~ _y_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
+        //~ std::vector<float> (_n_poly_coef));
+    //~ _z_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
+        //~ std::vector<float> (_n_poly_coef));
+    //~ _yaw_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
+        //~ std::vector<float> (_n_poly_coef));
         
-    for (vecf2d_sz row = 0; row != _n_spline_seg; ++row){
-        for (vecf_sz col = 0; col != _n_poly_coef; ++col){
-            _x_coefs.at(row).at(col) = x_coefs_arr[col + row*_n_poly_coef];
-            _y_coefs.at(row).at(col) = y_coefs_arr[col + row*_n_poly_coef];
-            _z_coefs.at(row).at(col) = z_coefs_arr[col + row*_n_poly_coef];
-            _yaw_coefs.at(row).at(col) = yaw_coefs_arr[col + row*_n_poly_coef];
-        }
-    }
+    //~ for (vecf2d_sz row = 0; row != _n_spline_seg; ++row){
+        //~ for (vecf_sz col = 0; col != _n_poly_coef; ++col){
+            //~ _x_coefs.at(row).at(col) = x_coefs_arr[col + row*_n_poly_coef];
+            //~ _y_coefs.at(row).at(col) = y_coefs_arr[col + row*_n_poly_coef];
+            //~ _z_coefs.at(row).at(col) = z_coefs_arr[col + row*_n_poly_coef];
+            //~ _yaw_coefs.at(row).at(col) = yaw_coefs_arr[col + row*_n_poly_coef];
+        //~ }
+    //~ }
     /******************************************************/
 
 	/* wakeup source */
@@ -1338,10 +1361,10 @@ MulticopterPositionControl::task_main()
             } else if (_control_mode.flag_control_trajectory_enabled) {
                 /* trajectory control - Ross Allen */
                 
+                // Initial computations at start of trajectory
                 if (!_control_trajectory_started) {
-
+                    
                     _control_trajectory_started = true;
-                    //~ poly_start_t = ((float)(t + SPLINE_START_DELAY))*0.000001f;
                     
                     // Generate cumulative time vector
                     spline_start_t_sec = ((float)(t + SPLINE_START_DELAY))*0.000001f;
@@ -1360,7 +1383,6 @@ MulticopterPositionControl::task_main()
                 //control_polynomial_trajectory(t_sec, poly_start_t, dt);
                 control_spline_trajectory(t_sec, spline_start_t_sec);
                 
-                
                 _mode_auto = false;
 
 			} else {
@@ -1369,7 +1391,7 @@ MulticopterPositionControl::task_main()
 			}
             
             /* reset trajectory start time */
-            if (!_control_mode.flag_control_trajectory_enabled && \
+            if (!_control_mode.flag_control_trajectory_enabled &&
                 _control_trajectory_started){
             
                 _control_trajectory_started = false;

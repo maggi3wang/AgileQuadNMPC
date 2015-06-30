@@ -76,6 +76,8 @@
 
 #include "mavlink_ftp.h"
 
+#include <uORB/topics/trajectory_spline.h> // had to move this here to resolve a C template error
+
 class Mavlink;
 
 class MavlinkReceiver
@@ -159,6 +161,7 @@ private:
 	orb_advert_t _pos_sp_triplet_pub;
 	orb_advert_t _vicon_position_pub;
     orb_advert_t _poly_coefs_pub;
+    orb_advert_t _traj_spline_pub;
 	orb_advert_t _vision_position_pub;
 	orb_advert_t _telemetry_status_pub;
 	orb_advert_t _rc_pub;
@@ -175,6 +178,8 @@ private:
     float _mean_vts_offset;
     float _M2;
     float _stdev_vts_offset;
+    bool _valid_traj_sequence;
+    trajectory_spline_s _uorb_traj_spline;
     
 
 	/* do not allow copying this class */
