@@ -16,23 +16,41 @@
 #ifndef TOPIC_TRAJECTORY_SPLINE_H_
 #define TOPIC_TRAJECTORY_SPLINE_H_
 
-//~ #include <stdint.h>
-//~ #include <stdbool.h>
 #include "../uORB.h"
-//~ #include <vector>
-#include <vector>
-#include "trajectory_segment.h"
+//~ #include "trajectory_segment.h"
 
 /**
  * @addtogroup topics
  * @{
  */
+ 
+struct trajectory_segment_s {
+	float Tdel;     // time length of segment
+    uint8_t nSeg;   // total number of segments in spline
+    uint8_t curSeg;     // current segment in spline
+    float xCoefs[10];  // coefficients for x polynomial
+    float yCoefs[10];  // coefficients for y polynomial
+    float zCoefs[10];  // coefficients for z polynomial
+    float yawCoefs[10];  // coefficients for yaw polynomial
+    
+    // Constructor
+    trajectory_segment_s():
+        Tdel(0.0f),
+        nSeg(0),
+        curSeg(0),
+        xCoefs{0},
+        yCoefs{0},
+        zCoefs{0},
+        yawCoefs{0}
+    {
+    }
+};
 
 /**
  * 
  */
 struct trajectory_spline_s {
-    std::vector<trajectory_segment_s> segs; // segments of spline
+    trajectory_segment_s segArr[5]; // segments of spline, max 5
 };
 
 /**

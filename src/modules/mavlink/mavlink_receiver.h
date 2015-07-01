@@ -59,6 +59,7 @@
 #include <uORB/topics/position_setpoint_triplet.h>
 #include <uORB/topics/vehicle_vicon_position.h>
 #include <uORB/topics/poly_coefs.h>
+#include <uORB/topics/trajectory_spline.h>
 #include <uORB/topics/vision_position_estimate.h>
 #include <uORB/topics/vehicle_attitude_setpoint.h>
 #include <uORB/topics/vehicle_rates_setpoint.h>
@@ -73,10 +74,9 @@
 #include <uORB/topics/airspeed.h>
 #include <uORB/topics/battery_status.h>
 #include <uORB/topics/vehicle_force_setpoint.h>
+#include <uORB/topics/trajectory_spline.h>
 
 #include "mavlink_ftp.h"
-
-#include <uORB/topics/trajectory_spline.h> // had to move this here to resolve a C template error
 
 class Mavlink;
 
@@ -179,6 +179,7 @@ private:
     float _M2;
     float _stdev_vts_offset;
     bool _valid_traj_sequence;
+    unsigned _seg_count;
     trajectory_spline_s _uorb_traj_spline;
     
 

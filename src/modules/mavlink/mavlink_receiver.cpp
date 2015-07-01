@@ -84,11 +84,10 @@ __BEGIN_DECLS
 
 __END_DECLS
 
-#include <uORB/topics/trajectory_segment.h> // had to move this here to resolve a C template error
-#include <uORB/topics/trajectory_spline.h> // had to move this here to resolve a C template error
 
 
 #define VICON_TOPIC_TIMEOUT 500000  // Vicon times out after 0.5s
+#define N_POLY_COEFS 10     // number of coefficients per polynomial spline segment
 #define MAX_TIMESTAMP_SAMPLES 100
 
 static const float mg2ms2 = CONSTANTS_ONE_G / 1000.0f;
@@ -138,6 +137,7 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
     _M2(0.0f),
     _stdev_vts_offset(0.0f),     // standard deviation of vicon timestamp offset from vicon sent to pixhawk recieved
     _valid_traj_sequence(false), // trajectory segments coming in valid sequence
+    _seg_count(0),
     _uorb_traj_spline{}     // structure to hold trajectory spline while it's compiled
 {
 
@@ -595,50 +595,76 @@ MavlinkReceiver::handle_message_traj_seg(mavlink_message_t *msg)
     mavlink_traj_seg_t mav_traj_seg;
     mavlink_msg_traj_seg_decode(msg, &mav_traj_seg);
     
-    /* create structure to pass with uORB */
-    struct trajectory_segment_s traj_seg;
-    memset(&traj_seg, 0, sizeof(traj_seg));
-    
-    /* copy information from mavlink to uorb structure */
-    traj_seg.Tdel  = mav_traj_seg.Tdel;
-    traj_seg.nSeg  = mav_traj_seg.nSeg;
-    traj_seg.curSeg  = mav_traj_seg.curSeg;
-    // xCoefs
-    unsigned xLen = sizeof(mav_traj_seg.xCoefs)/sizeof(float);
-    traj_seg.xCoefs.insert(traj_seg.xCoefs.end(), 
-            &mav_traj_seg.xCoefs[0], &mav_traj_seg.xCoefs[xLen]);
-    // yCoefs
-    unsigned yLen = sizeof(mav_traj_seg.yCoefs)/sizeof(float);
-    traj_seg.yCoefs.insert(traj_seg.yCoefs.end(), 
-            &mav_traj_seg.yCoefs[0], &mav_traj_seg.yCoefs[yLen]);
-    // zCoefs
-    unsigned zLen = sizeof(mav_traj_seg.zCoefs)/sizeof(float);
-    traj_seg.zCoefs.insert(traj_seg.zCoefs.end(), 
-            &mav_traj_seg.zCoefs[0], &mav_traj_seg.zCoefs[zLen]);
-    // yawCoefs
-    unsigned yawLen = sizeof(mav_traj_seg.yawCoefs)/sizeof(float);
-    traj_seg.yawCoefs.insert(traj_seg.yawCoefs.end(), 
-            &mav_traj_seg.yawCoefs[0], &mav_traj_seg.yawCoefs[yawLen]);
-            
-    /* compile into complete spline */
-    if (traj_seg.curSeg == 0){
-        _uorb_traj_spline.clear();   // clear out for new trajectory
-    }
-    
-    if (traj_seg.curSeg == _uorb_traj_spline.size()) {
-        _valid_traj_sequence = true;     // traj segments coming in valid order
-        _uorb_traj_spline.push_back(traj_seg);   // add segment to spline
-    } else {
+    /* Check valid size of spline */
+    if(mav_traj_seg.nSeg > 5) {
+        warnx("Too many spline segments");
+        _uorb_traj_spline = trajectory_spline_s();  // reconstruct to remove data
+        _seg_count = 0; // reset segment count
         _valid_traj_sequence = false;
-    }
+    } else {
     
-    /* advertise or publish topic */
-    if (_valid_traj_sequence && traj_seg.curSeg == traj_seg.nSeg) {
-        if (_trajectory_spline_pub < 0) {
-            _traj_spline_pub = orb_advertise(ORB_ID(trajectory_spline), &_uorb_traj_spline);
-
+        /* create structure to pass with uORB */
+        struct trajectory_segment_s traj_seg;
+        memset(&traj_seg, 0, sizeof(traj_seg));
+        
+        /* copy information from mavlink to uorb structure */
+        traj_seg.Tdel  = mav_traj_seg.Tdel;
+        traj_seg.nSeg  = mav_traj_seg.nSeg;
+        traj_seg.curSeg  = mav_traj_seg.curSeg;
+        
+        for (unsigned iter = 0; iter != N_POLY_COEFS; ++iter){
+            traj_seg.xCoefs[iter] = mav_traj_seg.xCoefs[iter];
+            traj_seg.yCoefs[iter] = mav_traj_seg.yCoefs[iter];
+            traj_seg.zCoefs[iter] = mav_traj_seg.zCoefs[iter];
+            traj_seg.yawCoefs[iter] = mav_traj_seg.yawCoefs[iter];
+        }
+        // xCoefs
+        //~ traj_seg.xCoefs = mav_traj_seg.xCoefs;
+        //~ std::copy(mav_traj_seg.xCoefs, mav_traj_seg.xCoefs+N_POLY_COEFS, traj_seg.xCoefs);
+        //~ unsigned xLen = sizeof(mav_traj_seg.xCoefs)/sizeof(float);
+        //~ traj_seg.xCoefs.insert(traj_seg.xCoefs.end(), 
+                //~ &mav_traj_seg.xCoefs[0], &mav_traj_seg.xCoefs[xLen]);
+        // yCoefs
+        //~ traj_seg.yCoefs = mav_traj_seg.yCoefs;
+        //~ unsigned yLen = sizeof(mav_traj_seg.yCoefs)/sizeof(float);
+        //~ traj_seg.yCoefs.insert(traj_seg.yCoefs.end(), 
+                //~ &mav_traj_seg.yCoefs[0], &mav_traj_seg.yCoefs[yLen]);
+        // zCoefs
+        //~ traj_seg.zCoefs = mav_traj_seg.zCoefs;
+        //~ unsigned zLen = sizeof(mav_traj_seg.zCoefs)/sizeof(float);
+        //~ traj_seg.zCoefs.insert(traj_seg.zCoefs.end(), 
+                //~ &mav_traj_seg.zCoefs[0], &mav_traj_seg.zCoefs[zLen]);
+        // yawCoefs
+        //~ traj_seg.yawCoefs = mav_traj_seg.yawCoefs;
+        //~ unsigned yawLen = sizeof(mav_traj_seg.yawCoefs)/sizeof(float);
+        //~ traj_seg.yawCoefs.insert(traj_seg.yawCoefs.end(), 
+                //~ &mav_traj_seg.yawCoefs[0], &mav_traj_seg.yawCoefs[yawLen]);
+                
+        /* compile into complete spline */
+        if (traj_seg.curSeg == 0){
+            _uorb_traj_spline = trajectory_spline_s(); // clear old data
+            //~ _uorb_traj_spline.clear();   // clear out for new trajectory
+        }
+        
+        if (traj_seg.curSeg == _seg_count) {
+            _valid_traj_sequence = true;     // traj segments coming in valid order
+            _uorb_traj_spline.segArr[traj_seg.curSeg] = traj_seg; // add segment
+            _seg_count++;   // increment seg count 
+            //~ _uorb_traj_spline.push_back(traj_seg);   // add segment to spline
         } else {
-            orb_publish(ORB_ID(trajectory_spline), _traj_spline_pub, &_uorb_traj_spline);
+            _uorb_traj_spline = trajectory_spline_s();  // reconstruct to remove data
+            _seg_count = 0; // reset seg count
+            _valid_traj_sequence = false;
+        }
+        
+        /* advertise or publish topic */
+        if (_valid_traj_sequence && traj_seg.curSeg == traj_seg.nSeg) {
+            if (_traj_spline_pub < 0) {
+                _traj_spline_pub = orb_advertise(ORB_ID(trajectory_spline), &_uorb_traj_spline);
+
+            } else {
+                orb_publish(ORB_ID(trajectory_spline), _traj_spline_pub, &_uorb_traj_spline);
+            }
         }
     }
     

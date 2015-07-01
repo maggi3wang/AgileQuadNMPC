@@ -118,7 +118,7 @@ ORB_DEFINE(poly_coefs, struct poly_coefs_s);
 //~ #include "topics/trajectory_segment.h"
 //~ ORB_DEFINE(trajectory_segment, struct trajectory_segment_s);
 
-#include "topics/trajectory_segment.h"
+#include "topics/trajectory_spline.h"
 ORB_DEFINE(trajectory_spline, struct trajectory_spline_s);
 
 #include "topics/vehicle_rates_setpoint.h"

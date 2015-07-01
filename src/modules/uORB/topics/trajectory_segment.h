@@ -14,13 +14,13 @@
  * @file trajectory_segment.h
  */
 
-#ifndef TOPIC_TRAJECTORY_SEGMENT_H_
-#define TOPIC_TRAJECTORY_SEGMENT_H_
+//~ #ifndef TOPIC_TRAJECTORY_SEGMENT_H_
+//~ #define TOPIC_TRAJECTORY_SEGMENT_H_
 
 //~ #include <stdint.h>
 //~ #include <stdbool.h>
 //~ #include "../uORB.h"
-#include <vector>
+//~ #include <vector>
 
 /**
  * @addtogroup topics
@@ -30,15 +30,27 @@
 /**
  * 
  */
-struct trajectory_segment_s {
-	float Tdel;     // time length of segment
-    std::vector<float> xCoefs;  // coefficients for x polynomial
-    std::vector<float> yCoefs;  // coefficients for y polynomial
-    std::vector<float> zCoefs;  // coefficients for z polynomial
-    std::vector<float> yawCoefs;  // coefficients for yaw polynomial
-    uint8_t nSeg;   // total number of segments in spline
-    uint8_t curSeg;     // current segment in spline
-};
+//~ struct trajectory_segment_s {
+	//~ float Tdel;     // time length of segment
+    //~ uint8_t nSeg;   // total number of segments in spline
+    //~ uint8_t curSeg;     // current segment in spline
+    //~ float xCoefs[10];  // coefficients for x polynomial
+    //~ float yCoefs[10];  // coefficients for y polynomial
+    //~ float zCoefs[10];  // coefficients for z polynomial
+    //~ float yawCoefs[10];  // coefficients for yaw polynomial
+    //~ 
+    //~ // Constructor
+    //~ trajectory_segment_s():
+        //~ Tdel(0.0f),
+        //~ nSeg(0),
+        //~ curSeg(0),
+        //~ xCoefs{0},
+        //~ yCoefs{0},
+        //~ zCoefs{0},
+        //~ yawCoefs{0}
+    //~ {
+    //~ }
+//~ };
 
 /**
  * @}
@@ -47,4 +59,4 @@ struct trajectory_segment_s {
 /* register this as object request broker structure */
 //~ ORB_DECLARE(trajectory_segment);
 
-#endif
+//~ #endif
