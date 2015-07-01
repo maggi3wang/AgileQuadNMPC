@@ -12,6 +12,10 @@
 /**
  * @file trajectory_spline.h
  */
+ #if defined(TRAJECTORY_SPLINE_WORKAROUND_NAMESPACE)
+namespace TRAJECTORY_SPLINE_WORKAROUND_NAMESPACE {
+#endif
+
 
 #ifndef TOPIC_TRAJECTORY_SPLINE_H_
 #define TOPIC_TRAJECTORY_SPLINE_H_
@@ -49,7 +53,7 @@ struct trajectory_segment_s {
 /**
  * 
  */
-struct trajectory_spline_s {
+struct __EXPORT trajectory_spline_s {
     trajectory_segment_s segArr[5]; // segments of spline, max 5
 };
 
@@ -60,4 +64,9 @@ struct trajectory_spline_s {
 /* register this as object request broker structure */
 ORB_DECLARE(trajectory_spline);
 
+#endif
+
+#if defined(TRAJECTORY_SPLINE_WORKAROUND_NAMESPACE)
+}
+#define TrajectorySplineNamespace TRAJECTORY_SPLINE_WORKAROUND_NAMESPACE::TrajectorySplineNamespace
 #endif

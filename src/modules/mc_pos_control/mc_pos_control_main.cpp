@@ -68,7 +68,6 @@
 #include <uORB/topics/vehicle_global_velocity_setpoint.h>
 #include <uORB/topics/vehicle_velocity_feed_forward.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
-#include <uORB/topics/trajectory_spline.h>
 #include <systemlib/param/param.h>
 #include <systemlib/err.h>
 #include <systemlib/systemlib.h>
@@ -78,6 +77,9 @@
 #include "mc_pos_control_asl_params.h"
 #include <vector>
 #include <numeric>  // partial_sum
+
+#define TRAJECTORY_SPLINE_WORKAROUND_NAMESPACE mcposcontrolmain
+#include <uORB/topics/trajectory_spline.h>
 
 #define TILT_COS_MAX	0.7f
 #define SIGMA			0.000001f
@@ -154,7 +156,7 @@ private:
 	struct vehicle_local_position_setpoint_s	_local_pos_sp;		/**< vehicle local position setpoint */
 	struct vehicle_global_velocity_setpoint_s	_global_vel_sp;	/**< vehicle global velocity setpoint */
     struct vehicle_velocity_feed_forward_s      _vel_ff_uorb;   /**< vehicle velocity feed forward term */
-    struct trajectory_spline_s                  _traj_spline;   /**< trajectory spline */
+    struct TrajectorySplineNamespace::trajectory_spline_s  _traj_spline;   /**< trajectory spline */
 
 
 	struct {
