@@ -120,7 +120,7 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 	_vicon_position_pub(-1),
     _poly_coefs_pub(-1),
     _traj_spline_pub(-1),
-    _test_topic_pub(-1),
+    //~ _test_topic_pub(-1),
 	_vision_position_pub(-1),
 	_telemetry_status_pub(-1),
 	_rc_pub(-1),
@@ -597,16 +597,16 @@ MavlinkReceiver::handle_message_traj_seg(mavlink_message_t *msg)
     mavlink_msg_traj_seg_decode(msg, &mav_traj_seg);
     
     // debug linker error
-    struct test_topic_s tt;
-    tt.foo = 10.01;
-    tt.bar = 1;
+    //~ struct test_topic_s tt;
+    //~ tt.foo = 10.01;
+    //~ tt.bar = 1;
     
-    if (_test_topic_pub < 0) {
-		_test_topic_pub = orb_advertise(ORB_ID(test_topic), &tt);
-
-	} else {
-		orb_publish(ORB_ID(test_topic), _test_topic_pub, &tt);
-	}
+    //~ if (_test_topic_pub < 0) {
+		//~ _test_topic_pub = orb_advertise(ORB_ID(test_topic), &tt);
+//~ 
+	//~ } else {
+		//~ orb_publish(ORB_ID(test_topic), _test_topic_pub, &tt);
+	//~ }
     
     /* Check valid size of spline */
     if(mav_traj_seg.nSeg > 5) {
