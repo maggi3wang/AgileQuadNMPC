@@ -68,6 +68,7 @@
 #include <uORB/topics/vehicle_global_velocity_setpoint.h>
 #include <uORB/topics/vehicle_velocity_feed_forward.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
+#include <uORB/topics/test_topic.h>
 #include <systemlib/param/param.h>
 #include <systemlib/err.h>
 #include <systemlib/systemlib.h>
@@ -78,7 +79,7 @@
 #include <vector>
 #include <numeric>  // partial_sum
 
-#define TRAJECTORY_SPLINE_WORKAROUND_NAMESPACE mcposcontrolmain
+//~ #define TRAJECTORY_SPLINE_WORKAROUND_NAMESPACE mcposcontrolmain
 #include <uORB/topics/trajectory_spline.h>
 
 #define TILT_COS_MAX	0.7f
@@ -140,6 +141,7 @@ private:
 	int		_local_pos_sp_sub;		/**< offboard local position setpoint */
 	int		_global_vel_sp_sub;		/**< offboard global velocity setpoint */
     int     _traj_spline_sub;       /**< trajectory spline */
+    int     _test_topic_sub;    // debug linker error
 
 	orb_advert_t	_att_sp_pub;			/**< attitude setpoint publication */
 	orb_advert_t	_local_pos_sp_pub;		/**< vehicle local position setpoint publication */
@@ -156,8 +158,8 @@ private:
 	struct vehicle_local_position_setpoint_s	_local_pos_sp;		/**< vehicle local position setpoint */
 	struct vehicle_global_velocity_setpoint_s	_global_vel_sp;	/**< vehicle global velocity setpoint */
     struct vehicle_velocity_feed_forward_s      _vel_ff_uorb;   /**< vehicle velocity feed forward term */
-    //~ struct TrajectorySplineNamespace::trajectory_spline_s  _traj_spline;   /**< trajectory spline */
-
+    struct trajectory_spline_s  _traj_spline;   /**< trajectory spline */
+    struct test_topic_s  testtop;
 
 	struct {
 		param_t thr_min;
@@ -349,7 +351,8 @@ MulticopterPositionControl::MulticopterPositionControl() :
 	_local_pos_sub(-1),
 	_pos_sp_triplet_sub(-1),
 	_global_vel_sp_sub(-1),
-    //~ _traj_spline_sub(-1),
+    _traj_spline_sub(-1),
+    _test_topic_sub(-1),
 
 /* publications */
 	_att_sp_pub(-1),
@@ -374,7 +377,8 @@ MulticopterPositionControl::MulticopterPositionControl() :
 	memset(&_local_pos_sp, 0, sizeof(_local_pos_sp));
 	memset(&_global_vel_sp, 0, sizeof(_global_vel_sp));
     memset(&_vel_ff_uorb, 0, sizeof(_vel_ff_uorb));
-    //~ memset(&_traj_spline, 0, sizeof(_traj_spline));
+    memset(&_traj_spline, 0, sizeof(_traj_spline));
+    memset(&testtop, 0, sizeof(testtop));
 
 	memset(&_ref_pos, 0, sizeof(_ref_pos));
 
@@ -616,12 +620,19 @@ MulticopterPositionControl::poll_subscriptions()
 		orb_copy(ORB_ID(vehicle_local_position), _local_pos_sub, &_local_pos);
 	}
     
-    //~ orb_check(_traj_spline_sub, &updated);
-    //~ 
-    //~ if (updated) {
-        //~ orb_copy(ORB_ID(trajectory_spline), _traj_spline_sub, &_traj_spline);
-        //~ _control_trajectory_started = false;
-    //~ }
+    orb_check(_traj_spline_sub, &updated);
+    
+    if (updated) {
+        orb_copy(ORB_ID(trajectory_spline), _traj_spline_sub, &_traj_spline);
+        _control_trajectory_started = false;
+    }
+    
+    // debug linker error
+    orb_check(_test_topic_sub, &updated);
+    
+    if (updated) {
+		orb_copy(ORB_ID(test_topic), _test_topic_sub, &testtop);
+	}
 }
 
 float
@@ -1242,7 +1253,7 @@ MulticopterPositionControl::task_main()
 	_pos_sp_triplet_sub = orb_subscribe(ORB_ID(position_setpoint_triplet));
 	_local_pos_sp_sub = orb_subscribe(ORB_ID(vehicle_local_position_setpoint));
 	_global_vel_sp_sub = orb_subscribe(ORB_ID(vehicle_global_velocity_setpoint));
-    //~ _traj_spline_sub = orb_subscribe(ORB_ID(trajectory_spline));
+    _traj_spline_sub = orb_subscribe(ORB_ID(trajectory_spline));
 
 
 	parameters_update(true);
@@ -1399,8 +1410,8 @@ MulticopterPositionControl::task_main()
                     _control_trajectory_started = true;
                     
                     // number of segments in spline
-                    //~ _n_spline_seg = _traj_spline.segArr[0].nSeg;
-                    _n_spline_seg = 5; // DEBUG
+                    _n_spline_seg = _traj_spline.segArr[0].nSeg;
+                    //~ _n_spline_seg = 5; // DEBUG
                     
                     // initialize vector of appropriate size
                     _spline_delt_sec = std::vector<float> (_n_spline_seg, 0.0f); // time step sizes for each segment
@@ -1416,17 +1427,17 @@ MulticopterPositionControl::task_main()
                         
                     // Copy data from trajectory_spline topic
                     for (vecf2d_sz row = 0; row != _n_spline_seg; ++row){
-                        //~ _spline_delt_sec.at(row) = _traj_spline.segArr[row].Tdel;
-                        _spline_delt_sec.at(row) = 0;
+                        _spline_delt_sec.at(row) = _traj_spline.segArr[row].Tdel;
+                        //~ _spline_delt_sec.at(row) = 0;
                         for (vecf_sz col = 0; col != N_POLY_COEFS; ++col){
-                            //~ _x_coefs.at(row).at(col) = _traj_spline.segArr[row].xCoefs[col];
-                            //~ _y_coefs.at(row).at(col) = _traj_spline.segArr[row].yCoefs[col];
-                            //~ _z_coefs.at(row).at(col) = _traj_spline.segArr[row].zCoefs[col];
-                            //~ _yaw_coefs.at(row).at(col) = _traj_spline.segArr[row].yawCoefs[col];
-                            _x_coefs.at(row).at(col) = 0;
-                            _y_coefs.at(row).at(col) = 0;
-                            _z_coefs.at(row).at(col) = 0;
-                            _yaw_coefs.at(row).at(col) = 0;
+                            _x_coefs.at(row).at(col) = _traj_spline.segArr[row].xCoefs[col];
+                            _y_coefs.at(row).at(col) = _traj_spline.segArr[row].yCoefs[col];
+                            _z_coefs.at(row).at(col) = _traj_spline.segArr[row].zCoefs[col];
+                            _yaw_coefs.at(row).at(col) = _traj_spline.segArr[row].yawCoefs[col];
+                            //~ _x_coefs.at(row).at(col) = 0;
+                            //~ _y_coefs.at(row).at(col) = 0;
+                            //~ _z_coefs.at(row).at(col) = 0;
+                            //~ _yaw_coefs.at(row).at(col) = 0;
                         }
                     }
                     

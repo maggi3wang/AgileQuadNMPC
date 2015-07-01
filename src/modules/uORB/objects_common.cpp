@@ -121,6 +121,9 @@ ORB_DEFINE(poly_coefs, struct poly_coefs_s);
 #include "topics/trajectory_spline.h"
 ORB_DEFINE(trajectory_spline, struct trajectory_spline_s);
 
+#include "topics/test_topic.h"
+ORB_DEFINE(test_topic, struct test_topic_s);    // debugging linker issue
+
 #include "topics/vehicle_rates_setpoint.h"
 ORB_DEFINE(vehicle_rates_setpoint, struct vehicle_rates_setpoint_s);
 
