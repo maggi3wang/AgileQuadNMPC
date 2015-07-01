@@ -68,6 +68,7 @@
 #include <uORB/topics/vehicle_global_velocity_setpoint.h>
 #include <uORB/topics/vehicle_velocity_feed_forward.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
+#include <uORB/topics/trajectory_spline.h>
 #include <systemlib/param/param.h>
 #include <systemlib/err.h>
 #include <systemlib/systemlib.h>
@@ -77,9 +78,6 @@
 #include "mc_pos_control_asl_params.h"
 #include <vector>
 #include <numeric>  // partial_sum
-
-//~ #define TRAJECTORY_SPLINE_WORKAROUND_NAMESPACE mcposcontrolmain
-#include <uORB/topics/trajectory_spline.h>
 
 #define TILT_COS_MAX	0.7f
 #define SIGMA			0.000001f
@@ -1400,7 +1398,6 @@ MulticopterPositionControl::task_main()
                     
                     // number of segments in spline
                     _n_spline_seg = _traj_spline.segArr[0].nSeg;
-                    //~ _n_spline_seg = 5; // DEBUG
                     
                     // initialize vector of appropriate size
                     _spline_delt_sec = std::vector<float> (_n_spline_seg, 0.0f); // time step sizes for each segment
@@ -1417,16 +1414,11 @@ MulticopterPositionControl::task_main()
                     // Copy data from trajectory_spline topic
                     for (vecf2d_sz row = 0; row != _n_spline_seg; ++row){
                         _spline_delt_sec.at(row) = _traj_spline.segArr[row].Tdel;
-                        //~ _spline_delt_sec.at(row) = 0;
                         for (vecf_sz col = 0; col != N_POLY_COEFS; ++col){
                             _x_coefs.at(row).at(col) = _traj_spline.segArr[row].xCoefs[col];
                             _y_coefs.at(row).at(col) = _traj_spline.segArr[row].yCoefs[col];
                             _z_coefs.at(row).at(col) = _traj_spline.segArr[row].zCoefs[col];
                             _yaw_coefs.at(row).at(col) = _traj_spline.segArr[row].yawCoefs[col];
-                            //~ _x_coefs.at(row).at(col) = 0;
-                            //~ _y_coefs.at(row).at(col) = 0;
-                            //~ _z_coefs.at(row).at(col) = 0;
-                            //~ _yaw_coefs.at(row).at(col) = 0;
                         }
                     }
                     

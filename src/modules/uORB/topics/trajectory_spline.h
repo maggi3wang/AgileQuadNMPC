@@ -12,10 +12,6 @@
 /**
  * @file trajectory_spline.h
  */
-//~ #if defined(TRAJECTORY_SPLINE_WORKAROUND_NAMESPACE)
-//~ namespace TRAJECTORY_SPLINE_WORKAROUND_NAMESPACE {
-//~ #endif
-
 
 #ifndef TOPIC_TRAJECTORY_SPLINE_H_
 #define TOPIC_TRAJECTORY_SPLINE_H_
@@ -65,8 +61,3 @@ struct __EXPORT trajectory_spline_s {
 ORB_DECLARE(trajectory_spline);
 
 #endif
-
-//~ #if defined(TRAJECTORY_SPLINE_WORKAROUND_NAMESPACE)
-//~ }
-//~ #define TrajectorySplineNamespace TRAJECTORY_SPLINE_WORKAROUND_NAMESPACE::TrajectorySplineNamespace
-//~ #endif
