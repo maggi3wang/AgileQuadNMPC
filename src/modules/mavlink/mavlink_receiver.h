@@ -75,7 +75,6 @@
 #include <uORB/topics/battery_status.h>
 #include <uORB/topics/vehicle_force_setpoint.h>
 #include <uORB/topics/trajectory_spline.h>
-//~ #include <uORB/topics/test_topic.h>
 
 #include "mavlink_ftp.h"
 
@@ -163,7 +162,6 @@ private:
 	orb_advert_t _vicon_position_pub;
     orb_advert_t _poly_coefs_pub;
     orb_advert_t _traj_spline_pub;
-    //~ orb_advert_t _test_topic_pub;   //debug linker error
 	orb_advert_t _vision_position_pub;
 	orb_advert_t _telemetry_status_pub;
 	orb_advert_t _rc_pub;

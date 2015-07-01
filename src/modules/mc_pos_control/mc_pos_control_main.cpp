@@ -68,7 +68,6 @@
 #include <uORB/topics/vehicle_global_velocity_setpoint.h>
 #include <uORB/topics/vehicle_velocity_feed_forward.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
-//~ #include <uORB/topics/test_topic.h>
 #include <systemlib/param/param.h>
 #include <systemlib/err.h>
 #include <systemlib/systemlib.h>
@@ -141,7 +140,6 @@ private:
 	int		_local_pos_sp_sub;		/**< offboard local position setpoint */
 	int		_global_vel_sp_sub;		/**< offboard global velocity setpoint */
     int     _traj_spline_sub;       /**< trajectory spline */
-    //~ int     _test_topic_sub;    // debug linker error
 
 	orb_advert_t	_att_sp_pub;			/**< attitude setpoint publication */
 	orb_advert_t	_local_pos_sp_pub;		/**< vehicle local position setpoint publication */
@@ -159,7 +157,6 @@ private:
 	struct vehicle_global_velocity_setpoint_s	_global_vel_sp;	/**< vehicle global velocity setpoint */
     struct vehicle_velocity_feed_forward_s      _vel_ff_uorb;   /**< vehicle velocity feed forward term */
     struct trajectory_spline_s  _traj_spline;   /**< trajectory spline */
-    //~ struct test_topic_s  testtop;
 
 	struct {
 		param_t thr_min;
@@ -352,7 +349,6 @@ MulticopterPositionControl::MulticopterPositionControl() :
 	_pos_sp_triplet_sub(-1),
 	_global_vel_sp_sub(-1),
     _traj_spline_sub(-1),
-    //~ _test_topic_sub(-1),
 
 /* publications */
 	_att_sp_pub(-1),
@@ -378,7 +374,6 @@ MulticopterPositionControl::MulticopterPositionControl() :
 	memset(&_global_vel_sp, 0, sizeof(_global_vel_sp));
     memset(&_vel_ff_uorb, 0, sizeof(_vel_ff_uorb));
     memset(&_traj_spline, 0, sizeof(_traj_spline));
-    //~ memset(&testtop, 0, sizeof(testtop));
 
 	memset(&_ref_pos, 0, sizeof(_ref_pos));
 
@@ -627,12 +622,6 @@ MulticopterPositionControl::poll_subscriptions()
         _control_trajectory_started = false;
     }
     
-    //~ // debug linker error
-    //~ orb_check(_test_topic_sub, &updated);
-    //~ 
-    //~ if (updated) {
-		//~ orb_copy(ORB_ID(test_topic), _test_topic_sub, &testtop);
-	//~ }
 }
 
 float
