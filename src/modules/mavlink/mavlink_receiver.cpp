@@ -591,6 +591,7 @@ MavlinkReceiver::handle_message_poly_coefs(mavlink_message_t *msg)
 void
 MavlinkReceiver::handle_message_traj_seg(mavlink_message_t *msg)
 {
+    
     /* decode message */
     mavlink_traj_seg_t mav_traj_seg;
     mavlink_msg_traj_seg_decode(msg, &mav_traj_seg);
@@ -613,33 +614,14 @@ MavlinkReceiver::handle_message_traj_seg(mavlink_message_t *msg)
         traj_seg.nSeg  = mav_traj_seg.nSeg;
         traj_seg.curSeg  = mav_traj_seg.curSeg;
         
+        printf("processing trajectory segment %d of %d\n", traj_seg.curSeg, traj_seg.nSeg);
+        
         for (unsigned iter = 0; iter != N_POLY_COEFS; ++iter){
             traj_seg.xCoefs[iter] = mav_traj_seg.xCoefs[iter];
             traj_seg.yCoefs[iter] = mav_traj_seg.yCoefs[iter];
             traj_seg.zCoefs[iter] = mav_traj_seg.zCoefs[iter];
             traj_seg.yawCoefs[iter] = mav_traj_seg.yawCoefs[iter];
         }
-        // xCoefs
-        //~ traj_seg.xCoefs = mav_traj_seg.xCoefs;
-        //~ std::copy(mav_traj_seg.xCoefs, mav_traj_seg.xCoefs+N_POLY_COEFS, traj_seg.xCoefs);
-        //~ unsigned xLen = sizeof(mav_traj_seg.xCoefs)/sizeof(float);
-        //~ traj_seg.xCoefs.insert(traj_seg.xCoefs.end(), 
-                //~ &mav_traj_seg.xCoefs[0], &mav_traj_seg.xCoefs[xLen]);
-        // yCoefs
-        //~ traj_seg.yCoefs = mav_traj_seg.yCoefs;
-        //~ unsigned yLen = sizeof(mav_traj_seg.yCoefs)/sizeof(float);
-        //~ traj_seg.yCoefs.insert(traj_seg.yCoefs.end(), 
-                //~ &mav_traj_seg.yCoefs[0], &mav_traj_seg.yCoefs[yLen]);
-        // zCoefs
-        //~ traj_seg.zCoefs = mav_traj_seg.zCoefs;
-        //~ unsigned zLen = sizeof(mav_traj_seg.zCoefs)/sizeof(float);
-        //~ traj_seg.zCoefs.insert(traj_seg.zCoefs.end(), 
-                //~ &mav_traj_seg.zCoefs[0], &mav_traj_seg.zCoefs[zLen]);
-        // yawCoefs
-        //~ traj_seg.yawCoefs = mav_traj_seg.yawCoefs;
-        //~ unsigned yawLen = sizeof(mav_traj_seg.yawCoefs)/sizeof(float);
-        //~ traj_seg.yawCoefs.insert(traj_seg.yawCoefs.end(), 
-                //~ &mav_traj_seg.yawCoefs[0], &mav_traj_seg.yawCoefs[yawLen]);
                 
         /* compile into complete spline */
         if (traj_seg.curSeg == 0){
@@ -647,7 +629,7 @@ MavlinkReceiver::handle_message_traj_seg(mavlink_message_t *msg)
             //~ _uorb_traj_spline.clear();   // clear out for new trajectory
         }
         
-        if (traj_seg.curSeg == _seg_count) {
+        if (traj_seg.curSeg == _seg_count+1) {
             _valid_traj_sequence = true;     // traj segments coming in valid order
             _uorb_traj_spline.segArr[traj_seg.curSeg] = traj_seg; // add segment
             _seg_count++;   // increment seg count 
@@ -660,6 +642,9 @@ MavlinkReceiver::handle_message_traj_seg(mavlink_message_t *msg)
         
         /* advertise or publish topic */
         if (_valid_traj_sequence && traj_seg.curSeg == traj_seg.nSeg) {
+            printf("publishing trajectory spline\n");
+            _seg_count = 0;
+            _valid_traj_sequence = false;
             if (_traj_spline_pub < 0) {
                 _traj_spline_pub = orb_advertise(ORB_ID(trajectory_spline), &_uorb_traj_spline);
 

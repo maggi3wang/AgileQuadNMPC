@@ -179,7 +179,7 @@ private:
     float _M2;
     float _stdev_vts_offset;
     bool _valid_traj_sequence;
-    unsigned _seg_count;
+    unsigned _seg_count;        // number of processed segments
     trajectory_spline_s _uorb_traj_spline;
     
 
