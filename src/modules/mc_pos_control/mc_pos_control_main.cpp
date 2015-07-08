@@ -287,6 +287,7 @@ private:
     void        control_periodic_trajectory(float t, float dt);
     void        control_polynomial_trajectory(float t, float start_t, float dt);
     void        control_spline_trajectory(float t, float start_t);
+    void        trajectory_hold();
     
     /**
      * Evaluate polynomials
@@ -616,6 +617,7 @@ MulticopterPositionControl::poll_subscriptions()
     orb_check(_traj_spline_sub, &updated);
     
     if (updated) {
+        printf("DEBUG: trajectory recieved\n");
         orb_copy(ORB_ID(trajectory_spline), _traj_spline_sub, &_traj_spline);
         _control_trajectory_started = false;
     }
@@ -924,6 +926,8 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
     
     if (cur_spline_t <= 0) {
         
+        printf("DEBUG005a\n");
+        
         _pos_sp(0) = poly_eval(_x_coefs.at(0), 0.0f);
         _pos_sp(1) = poly_eval(_y_coefs.at(0), 0.0f);
         _pos_sp(2) = poly_eval(_z_coefs.at(0), 0.0f);
@@ -943,6 +947,8 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
         _acc_ff(2) = 0.0f;
         
     } else if (cur_spline_t > 0 && cur_spline_t < spline_term_t) {
+        
+        printf("DEBUG005b\n");
     
         _pos_sp(0) = poly_eval(_x_coefs.at(cur_seg), cur_poly_t);
         _pos_sp(1) = poly_eval(_y_coefs.at(cur_seg), cur_poly_t);
@@ -964,6 +970,8 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
     
     } else {
         
+        printf("DEBUG005c\n");
+        
         _pos_sp(0) = poly_eval(_x_coefs.at(_x_coefs.size()-1), poly_term_t);
         _pos_sp(1) = poly_eval(_y_coefs.at(_y_coefs.size()-1), poly_term_t);
         _pos_sp(2) = poly_eval(_z_coefs.at(_z_coefs.size()-1), poly_term_t);
@@ -984,6 +992,24 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
         _acc_ff(2) = 0.0f;
     }
     
+}
+
+/* Added by Ross Allen */
+void
+MulticopterPositionControl::trajectory_hold()
+{
+        
+    reset_alt_sp();
+    reset_pos_sp();
+    
+    _vel_ff(0) = 0.0f;
+    _vel_ff(1) = 0.0f;
+    _vel_ff(2) = 0.0f;
+    
+    _acc_ff(0) = 0.0f;
+    _acc_ff(1) = 0.0f;
+    _acc_ff(2) = 0.0f;
+        
 }
 
 float
@@ -1391,53 +1417,72 @@ MulticopterPositionControl::task_main()
             } else if (_control_mode.flag_control_trajectory_enabled) {
                 /* trajectory control - Ross Allen */
                 
-                // Initial computations at start of trajectory
-                if (!_control_trajectory_started) {
+                
+                // Check that trajectory data is available
+                if (_traj_spline.segArr[0].nSeg > 0) {
                     
-                    _control_trajectory_started = true;
-                    
-                    // number of segments in spline
-                    _n_spline_seg = _traj_spline.segArr[0].nSeg;
-                    
-                    // initialize vector of appropriate size
-                    _spline_delt_sec = std::vector<float> (_n_spline_seg, 0.0f); // time step sizes for each segment
-                    _spline_cumt_sec = std::vector<float> (_n_spline_seg, 0.0f); // cumulative time markers for each segment
-                    _x_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
-                        std::vector<float> (N_POLY_COEFS));
-                    _y_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
-                        std::vector<float> (N_POLY_COEFS));
-                    _z_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
-                        std::vector<float> (N_POLY_COEFS));
-                    _yaw_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
-                        std::vector<float> (N_POLY_COEFS));
+                    // in case of interupted trajectory, make sure to 
+                    // hold at current position instead of going
+                    _reset_alt_sp = true;
+                    _reset_pos_sp = true;
+                
+                    // Initial computations at start of trajectory
+                    if (!_control_trajectory_started) {
                         
-                    // Copy data from trajectory_spline topic
-                    for (vecf2d_sz row = 0; row != _n_spline_seg; ++row){
-                        _spline_delt_sec.at(row) = _traj_spline.segArr[row].Tdel;
-                        for (vecf_sz col = 0; col != N_POLY_COEFS; ++col){
-                            _x_coefs.at(row).at(col) = _traj_spline.segArr[row].xCoefs[col];
-                            _y_coefs.at(row).at(col) = _traj_spline.segArr[row].yCoefs[col];
-                            _z_coefs.at(row).at(col) = _traj_spline.segArr[row].zCoefs[col];
-                            _yaw_coefs.at(row).at(col) = _traj_spline.segArr[row].yawCoefs[col];
+                        printf("DEBUG002\n");
+                        
+                        _control_trajectory_started = true;
+                        
+                        // number of segments in spline
+                        _n_spline_seg = _traj_spline.segArr[0].nSeg;
+                        
+                        // initialize vector of appropriate size
+                        _spline_delt_sec = std::vector<float> (_n_spline_seg, 0.0f); // time step sizes for each segment
+                        _spline_cumt_sec = std::vector<float> (_n_spline_seg, 0.0f); // cumulative time markers for each segment
+                        _x_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
+                            std::vector<float> (N_POLY_COEFS));
+                        _y_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
+                            std::vector<float> (N_POLY_COEFS));
+                        _z_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
+                            std::vector<float> (N_POLY_COEFS));
+                        _yaw_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
+                            std::vector<float> (N_POLY_COEFS));
+                            
+                        
+                        // Copy data from trajectory_spline topic
+                        for (vecf2d_sz row = 0; row != _n_spline_seg; ++row){
+                            _spline_delt_sec.at(row) = _traj_spline.segArr[row].Tdel;
+                            for (vecf_sz col = 0; col != N_POLY_COEFS; ++col){
+                                _x_coefs.at(row).at(col) = _traj_spline.segArr[row].xCoefs[col];
+                                _y_coefs.at(row).at(col) = _traj_spline.segArr[row].yCoefs[col];
+                                _z_coefs.at(row).at(col) = _traj_spline.segArr[row].zCoefs[col];
+                                _yaw_coefs.at(row).at(col) = _traj_spline.segArr[row].yawCoefs[col];
+                            }
                         }
+                        
+                        
+                        // Generate cumulative time vector
+                        spline_start_t_sec = ((float)(t + SPLINE_START_DELAY))*0.000001f;
+                        vector_cum_sum(_spline_delt_sec, 0.0f, _spline_cumt_sec);
+                        
+                        
+                        // Calculate derivative coefficients
+                        poly_deriv(_x_coefs, _xv_coefs);
+                        poly_deriv(_xv_coefs, _xa_coefs);
+                        poly_deriv(_y_coefs, _yv_coefs);
+                        poly_deriv(_yv_coefs, _ya_coefs);
+                        poly_deriv(_z_coefs, _zv_coefs);
+                        poly_deriv(_zv_coefs, _za_coefs);
                     }
                     
-                    // Generate cumulative time vector
-                    spline_start_t_sec = ((float)(t + SPLINE_START_DELAY))*0.000001f;
-                    vector_cum_sum(_spline_delt_sec, 0.0f, _spline_cumt_sec);
-                    
-                    // Calculate derivative coefficients
-                    poly_deriv(_x_coefs, _xv_coefs);
-                    poly_deriv(_xv_coefs, _xa_coefs);
-                    poly_deriv(_y_coefs, _yv_coefs);
-                    poly_deriv(_yv_coefs, _ya_coefs);
-                    poly_deriv(_z_coefs, _zv_coefs);
-                    poly_deriv(_zv_coefs, _za_coefs);
-                }
+                    /* call trajectory controller */
+                    control_spline_trajectory(t_sec, spline_start_t_sec);
                 
-                /* call trajectory controller */
-                //control_polynomial_trajectory(t_sec, poly_start_t, dt);
-                control_spline_trajectory(t_sec, spline_start_t_sec);
+                } else {
+                    // perform position hold
+                    trajectory_hold();
+                    
+                }
                 
                 _mode_auto = false;
 

@@ -17,7 +17,8 @@
 #define TOPIC_TRAJECTORY_SPLINE_H_
 
 #include "../uORB.h"
-//~ #include "trajectory_segment.h"
+
+#define MAX_TRAJ_SEGS 5
 
 /**
  * @addtogroup topics
@@ -50,7 +51,7 @@ struct trajectory_segment_s {
  * 
  */
 struct __EXPORT trajectory_spline_s {
-    trajectory_segment_s segArr[5]; // segments of spline, max 5
+    trajectory_segment_s segArr[MAX_TRAJ_SEGS]; // segments of spline, max 5
 };
 
 /**

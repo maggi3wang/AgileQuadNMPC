@@ -598,7 +598,7 @@ MavlinkReceiver::handle_message_traj_seg(mavlink_message_t *msg)
     
     
     /* Check valid size of spline */
-    if(mav_traj_seg.nSeg > 5) {
+    if(mav_traj_seg.nSeg > MAX_TRAJ_SEGS) {
         warnx("Too many spline segments");
         _uorb_traj_spline = trajectory_spline_s();  // reconstruct to remove data
         _seg_count = 0; // reset segment count
@@ -614,7 +614,7 @@ MavlinkReceiver::handle_message_traj_seg(mavlink_message_t *msg)
         traj_seg.nSeg  = mav_traj_seg.nSeg;
         traj_seg.curSeg  = mav_traj_seg.curSeg;
         
-        printf("processing trajectory segment %d of %d\n", traj_seg.curSeg, traj_seg.nSeg);
+        printf("DEBUG: processing trajectory segment %d of %d\n", traj_seg.curSeg, traj_seg.nSeg);
         
         for (unsigned iter = 0; iter != N_POLY_COEFS; ++iter){
             traj_seg.xCoefs[iter] = mav_traj_seg.xCoefs[iter];
@@ -624,14 +624,15 @@ MavlinkReceiver::handle_message_traj_seg(mavlink_message_t *msg)
         }
                 
         /* compile into complete spline */
-        if (traj_seg.curSeg == 0){
-            _uorb_traj_spline = trajectory_spline_s(); // clear old data
-            //~ _uorb_traj_spline.clear();   // clear out for new trajectory
+        
+        if (traj_seg.curSeg == 1){
+            // clear old data for new trajectory
+            _uorb_traj_spline = trajectory_spline_s();
         }
         
         if (traj_seg.curSeg == _seg_count+1) {
             _valid_traj_sequence = true;     // traj segments coming in valid order
-            _uorb_traj_spline.segArr[traj_seg.curSeg] = traj_seg; // add segment
+            _uorb_traj_spline.segArr[traj_seg.curSeg-1] = traj_seg; // add segment
             _seg_count++;   // increment seg count 
             //~ _uorb_traj_spline.push_back(traj_seg);   // add segment to spline
         } else {
@@ -642,7 +643,7 @@ MavlinkReceiver::handle_message_traj_seg(mavlink_message_t *msg)
         
         /* advertise or publish topic */
         if (_valid_traj_sequence && traj_seg.curSeg == traj_seg.nSeg) {
-            printf("publishing trajectory spline\n");
+            printf("DEBUG: publishing trajectory spline\n");
             _seg_count = 0;
             _valid_traj_sequence = false;
             if (_traj_spline_pub < 0) {
