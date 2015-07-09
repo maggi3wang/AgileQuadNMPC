@@ -926,8 +926,6 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
     
     if (cur_spline_t <= 0) {
         
-        printf("DEBUG005a\n");
-        
         _pos_sp(0) = poly_eval(_x_coefs.at(0), 0.0f);
         _pos_sp(1) = poly_eval(_y_coefs.at(0), 0.0f);
         _pos_sp(2) = poly_eval(_z_coefs.at(0), 0.0f);
@@ -947,8 +945,6 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
         _acc_ff(2) = 0.0f;
         
     } else if (cur_spline_t > 0 && cur_spline_t < spline_term_t) {
-        
-        printf("DEBUG005b\n");
     
         _pos_sp(0) = poly_eval(_x_coefs.at(cur_seg), cur_poly_t);
         _pos_sp(1) = poly_eval(_y_coefs.at(cur_seg), cur_poly_t);
@@ -969,8 +965,6 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
         _acc_ff(2) = poly_eval(_za_coefs.at(cur_seg), cur_poly_t);
     
     } else {
-        
-        printf("DEBUG005c\n");
         
         _pos_sp(0) = poly_eval(_x_coefs.at(_x_coefs.size()-1), poly_term_t);
         _pos_sp(1) = poly_eval(_y_coefs.at(_y_coefs.size()-1), poly_term_t);
@@ -1428,8 +1422,6 @@ MulticopterPositionControl::task_main()
                 
                     // Initial computations at start of trajectory
                     if (!_control_trajectory_started) {
-                        
-                        printf("DEBUG002\n");
                         
                         _control_trajectory_started = true;
                         
