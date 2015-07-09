@@ -2194,6 +2194,7 @@ set_main_state_rc(struct vehicle_status_s *status_local, struct manual_control_s
 	case SWITCH_POS_ON:			// ASL_TRAJCTL or POSCTL or ALTCTL on MANUAL
     
         /* transition to trajctl if inside and valid, transition to posctl if outside  - Ross Allen*/
+        // Needs a closer look
         if (status_local->condition_vicon_position_valid) {
             
             res = main_state_transition(status_local, MAIN_STATE_ASL_TRAJCTL);
