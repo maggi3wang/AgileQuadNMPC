@@ -206,7 +206,6 @@ private:
 	math::Vector<3> _vel;
 	math::Vector<3> _vel_sp;
 	math::Vector<3> _vel_prev;			/**< velocity on previous step */
-    //~ math::Vector<3> _vel_err_prev;      /**< velcoity error on previous step - Ross Allen */
 	math::Vector<3> _vel_ff;
 	math::Vector<3> _sp_move_rate;
     math::Vector<3> _acc_ff;            /**< acceleration of setpoint not including corrective terms - Ross Allen */
@@ -288,6 +287,7 @@ private:
     void        control_polynomial_trajectory(float t, float start_t, float dt);
     void        control_spline_trajectory(float t, float start_t);
     void        trajectory_hold();
+    void        reset_trajectory();
     
     /**
      * Evaluate polynomials
@@ -931,11 +931,6 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
         _pos_sp(2) = poly_eval(_z_coefs.at(0), 0.0f);
         _att_sp.yaw_body = poly_eval(_yaw_coefs.at(0), 0.0f);
         
-        //~ _pos_sp(0) = poly_eval(_traj_spline.segArr[0].xCoefs, 0.0f);
-        //~ _pos_sp(1) = poly_eval(_traj_spline.segArr[0].yCoefs, 0.0f);
-        //~ _pos_sp(2) = poly_eval(_traj_spline.segArr[0].zCoefs, 0.0f);
-        //~ _att_sp.yaw_body = poly_eval(_traj_spline.segArr[0].yawCoefs, 0.0f);
-        
         _vel_ff(0) = 0.0f;
         _vel_ff(1) = 0.0f;
         _vel_ff(2) = 0.0f;
@@ -951,11 +946,6 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
         _pos_sp(2) = poly_eval(_z_coefs.at(cur_seg), cur_poly_t);
         _att_sp.yaw_body = poly_eval(_yaw_coefs.at(cur_seg), cur_poly_t);
         
-        //~ _pos_sp(0) = poly_eval(_traj_spline.segArr[cur_seg].xCoefs, cur_poly_t);
-        //~ _pos_sp(1) = poly_eval(_traj_spline.segArr[cur_seg].yCoefs, cur_poly_t);
-        //~ _pos_sp(2) = poly_eval(_traj_spline.segArr[cur_seg].zCoefs, cur_poly_t);
-        //~ _att_sp.yaw_body = poly_eval(_traj_spline.segArr[0].yawCoefs, cur_poly_t);
-        
         _vel_ff(0) = poly_eval(_xv_coefs.at(cur_seg), cur_poly_t);
         _vel_ff(1) = poly_eval(_yv_coefs.at(cur_seg), cur_poly_t);
         _vel_ff(2) = poly_eval(_zv_coefs.at(cur_seg), cur_poly_t);
@@ -970,12 +960,6 @@ MulticopterPositionControl::control_spline_trajectory(float t, float start_t)
         _pos_sp(1) = poly_eval(_y_coefs.at(_y_coefs.size()-1), poly_term_t);
         _pos_sp(2) = poly_eval(_z_coefs.at(_z_coefs.size()-1), poly_term_t);
         _att_sp.yaw_body = poly_eval(_yaw_coefs.at(_yaw_coefs.size()-1), poly_term_t);
-        
-        //~ _pos_sp(0) = poly_eval(_traj_spline.segArr[_traj_spline[0].nSeg-1].xCoefs, poly_term_t);
-        //~ _pos_sp(1) = poly_eval(_traj_spline.segArr[_traj_spline[0].nSeg-1].yCoefs, poly_term_t);
-        //~ _pos_sp(2) = poly_eval(_traj_spline.segArr[_traj_spline[0].nSeg-1].zCoefs, poly_term_t);
-        //~ _att_sp.yaw_body = poly_eval(_traj_spline.segArr[_traj_spline[0].nSeg-1].yawCoefs, poly_term_t);
-        
         
         _vel_ff(0) = 0.0f;
         _vel_ff(1) = 0.0f;
@@ -1003,6 +987,18 @@ MulticopterPositionControl::trajectory_hold()
     _acc_ff(0) = 0.0f;
     _acc_ff(1) = 0.0f;
     _acc_ff(2) = 0.0f;
+        
+}
+
+/* Added by Ross Allen */
+void
+MulticopterPositionControl::reset_trajectory()
+{
+        
+    memset(&_traj_spline, 0, sizeof(_traj_spline));
+    _control_trajectory_started = false;
+    reset_alt_sp();
+    reset_pos_sp();
         
 }
 
@@ -1099,6 +1095,8 @@ std::vector< std::vector<float> >& deriv) {
     }
     
 }
+
+
 
 void
 MulticopterPositionControl::control_auto(float dt)
@@ -1276,6 +1274,7 @@ MulticopterPositionControl::task_main()
 	bool reset_int_xy = true;
 	bool was_armed = false;
     _control_trajectory_started = false;
+    bool was_flag_control_trajectory_enabled = false;
 
 	hrt_abstime t_prev = 0;
 
@@ -1290,53 +1289,8 @@ MulticopterPositionControl::task_main()
     typedef std::vector<float>::size_type vecf_sz;
     typedef std::vector< std::vector<float> >::size_type vecf2d_sz;
     
-    // initialize n_deg in a way such that arrays can be init w const values
-    //~ const int n_seg = 2;
-    //~ const int n_coef = 10;
-    //~ _n_spline_seg = n_seg;
-    //~ _n_poly_coef = n_coef;
-    
     // time vector
     float spline_start_t_sec;
-    //~ _spline_delt_sec = std::vector<float> (_n_spline_seg, 0.0f); // time step sizes for each segment
-    //~ _spline_delt_sec.at(0) = 1.5611f;
-    //~ _spline_delt_sec.at(1) = 1.6209f;
-    //~ 
-    //~ _spline_cumt_sec = std::vector<float> (_n_spline_seg, 0.0f); // cumulative time markers for each segment
-    
-    // coefficient vectors
-    //~ float x_coefs_arr[n_seg*(n_coef+1)] = 
-        //~ { 1.63f, 0.0f, 0.0f, 0.0f, 0.0f, 2.15f, -3.78f, 2.65f, -0.876f, 0.114f, 
-        //~ 2.13f, 0.043f, -0.901f, -0.056f, 0.926f, -1.20f, 1.73f, -1.51f, 0.613f, -0.092f};
-    //~ float y_coefs_arr[n_seg*(n_coef+1)] = 
-        //~ { 2.56f, 0.0f, 0.0f, 0.0f, 0.0f, -0.654f, 0.956f, -0.599f, 0.185f, -0.0232f, 
-        //~ 2.06, -0.783f, -0.0784f, 0.347f, 0.0652f, -0.350f, 0.527f, -0.460f, 0.192f, -0.0299};
-    //~ float z_coefs_arr[n_seg*(n_coef+1)] = 
-        //~ { -1.50f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 
-        //~ -1.50f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-    //~ float yaw_coefs_arr[n_seg*(n_coef+1)] = 
-        //~ { ASL_LAB_CENTER_YAW, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,  
-        //~ ASL_LAB_CENTER_YAW, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-
-    // initialize vector of appropriate size
-    //~ _x_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
-        //~ std::vector<float> (_n_poly_coef));
-    //~ _y_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
-        //~ std::vector<float> (_n_poly_coef));
-    //~ _z_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
-        //~ std::vector<float> (_n_poly_coef));
-    //~ _yaw_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
-        //~ std::vector<float> (_n_poly_coef));
-        
-    //~ for (vecf2d_sz row = 0; row != _n_spline_seg; ++row){
-        //~ for (vecf_sz col = 0; col != _n_poly_coef; ++col){
-            //~ _x_coefs.at(row).at(col) = x_coefs_arr[col + row*_n_poly_coef];
-            //~ _y_coefs.at(row).at(col) = y_coefs_arr[col + row*_n_poly_coef];
-            //~ _z_coefs.at(row).at(col) = z_coefs_arr[col + row*_n_poly_coef];
-            //~ _yaw_coefs.at(row).at(col) = yaw_coefs_arr[col + row*_n_poly_coef];
-        //~ }
-    //~ }
-    /******************************************************/
 
 	/* wakeup source */
 	struct pollfd fds[1];
@@ -1369,16 +1323,18 @@ MulticopterPositionControl::task_main()
 		t_prev = t;
 
 		if (_control_mode.flag_armed && !was_armed) {
-			/* reset setpoints and integrals on arming */
+			/* reset setpoints, integrals and trajectory on arming */
 			_reset_pos_sp = true;
 			_reset_alt_sp = true;
 			reset_int_z = true;
 			reset_int_xy = true;
+            reset_trajectory();
 		}
 
 		was_armed = _control_mode.flag_armed;
 
 		update_ref();
+        
 
 		if (_control_mode.flag_control_altitude_enabled ||
 		    _control_mode.flag_control_position_enabled ||
@@ -1488,7 +1444,14 @@ MulticopterPositionControl::task_main()
                 _control_trajectory_started){
             
                 _control_trajectory_started = false;
-            }                
+            }
+            
+            /* reset trajectory data when switched out of traj control */
+            if (!_control_mode.flag_control_trajectory_enabled &&
+                was_flag_control_trajectory_enabled){
+            
+                reset_trajectory();
+            }                  
 
 			/* fill local position setpoint */
 			_local_pos_sp.timestamp = hrt_absolute_time();
@@ -1855,6 +1818,9 @@ MulticopterPositionControl::task_main()
 
 		/* reset altitude controller integral (hovering throttle) to manual throttle after manual throttle control */
 		reset_int_z_manual = _control_mode.flag_armed && _control_mode.flag_control_manual_enabled && !_control_mode.flag_control_climb_rate_enabled;
+        
+        /* record state of trajectory control mode for next iteration */
+        was_flag_control_trajectory_enabled = _control_mode.flag_control_trajectory_enabled;
 	}
 
 	warnx("stopped");
