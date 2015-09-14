@@ -1115,7 +1115,10 @@ int sdlog2_thread_main(int argc, char *argv[])
 		/* check GPS topic to get GPS time */
 		if (log_name_timestamp) {
 			if (!orb_copy(ORB_ID(vehicle_gps_position), subs.gps_pos_sub, &buf_gps_pos)) {
-				gps_time = buf_gps_pos.time_gps_usec;
+				if (buf_gps_pos.fix_type > 1) {
+					// require at least 2D fix
+					gps_time = buf_gps_pos.time_gps_usec;
+				}
 			}
 		}
 
@@ -1143,7 +1146,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 		/* --- GPS POSITION - LOG MANAGEMENT --- */
 		bool gps_pos_updated = copy_if_updated(ORB_ID(vehicle_gps_position), &subs.gps_pos_sub, &buf_gps_pos);
 
-		if (gps_pos_updated && log_name_timestamp) {
+		if (gps_pos_updated && log_name_timestamp && buf_gps_pos.fix_type > 1) {
 			gps_time = buf_gps_pos.time_gps_usec;
 		}
 
