@@ -9,3 +9,5 @@ position_estimator_inav start
 
 mc_att_control start
 mc_pos_control start
+
+mc_traj_control start

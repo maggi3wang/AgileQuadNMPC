@@ -1199,6 +1199,8 @@ MulticopterTrajectoryControl::task_main()
 			if (_control_mode.flag_control_trajectory_enabled) {
 				if (_actuators_0_pub > 0) {
 					orb_publish(ORB_ID(actuator_controls_0), _actuators_0_pub, &_actuators);
+					
+					printf("DEBUG: publishing on actuator_controls_0\n");
 
 				} else {
 					_actuators_0_pub = orb_advertise(ORB_ID(actuator_controls_0), &_actuators);
