@@ -15,7 +15,7 @@
 #include <stdio.h>
 #include <errno.h>
  
-__EXPORT int mc_traj_control_main(int argc, char *argv[]);
+extern "C" __EXPORT int mc_traj_control_main(int argc, char *argv[]);
  
 int mc_traj_control_main(int argc, char *argv[])
 {
