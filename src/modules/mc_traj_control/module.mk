@@ -4,4 +4,4 @@
 
 MODULE_COMMAND	= mc_traj_control
 
-SRCS		= mc_traj_control.cpp
+SRCS		= mc_traj_control_main.cpp
