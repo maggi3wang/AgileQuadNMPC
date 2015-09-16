@@ -68,6 +68,7 @@
 #include <uORB/topics/vehicle_velocity_feed_forward.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
 #include <uORB/topics/trajectory_spline.h>
+#include <uORB/topics/actuator_controls.h>
 #include <systemlib/param/param.h>
 #include <systemlib/err.h>
 #include <systemlib/systemlib.h>
@@ -142,6 +143,7 @@ private:
 	orb_advert_t	_local_pos_sp_pub;		/**< vehicle local position setpoint publication */
 	orb_advert_t	_global_vel_sp_pub;		/**< vehicle global velocity setpoint publication */
     orb_advert_t    _vel_ff_uorb_pub;       /**< vehicle velocity feed forward publication */
+    orb_advert_t	_actuators_0_pub;		/**< attitude actuator controls publication */
 
 	struct vehicle_attitude_s			_att;			/**< vehicle attitude */
 	struct vehicle_attitude_setpoint_s		_att_sp;		/**< vehicle attitude setpoint */
@@ -154,6 +156,7 @@ private:
 	struct vehicle_global_velocity_setpoint_s	_global_vel_sp;	/**< vehicle global velocity setpoint */
     struct vehicle_velocity_feed_forward_s      _vel_ff_uorb;   /**< vehicle velocity feed forward term */
     struct trajectory_spline_s  _traj_spline;   /**< trajectory spline */
+    struct actuator_controls_s			_actuators;			/**< actuator controls */
 
 	struct {
 		param_t thr_min;
@@ -207,6 +210,8 @@ private:
 	math::Vector<3> _vel_ff;
 	math::Vector<3> _sp_move_rate;
     math::Vector<3> _acc_ff;            /**< acceleration of setpoint not including corrective terms - Ross Allen */
+    math::Vector<3>	_att_control;	/**< attitude control vector */
+    float			_thrust_sp;		/**< thrust setpoint */
     
     int _n_spline_seg;      /** < number of segments in spline (not max number, necassarily) */
     
@@ -265,15 +270,10 @@ private:
 	 */
 	void		limit_pos_sp_offset();
 
-	/**
-	 * Set position setpoint using manual control
-	 */
-	void		control_manual(float dt);
 
 	/**
 	 * Set position setpoint using offboard control
 	 */
-	void		control_offboard(float dt);
 
 	bool		cross_sphere_line(const math::Vector<3>& sphere_c, float sphere_r,
 					const math::Vector<3> line_a, const math::Vector<3> line_b, math::Vector<3>& res);
@@ -352,6 +352,7 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 	_local_pos_sp_pub(-1),
 	_global_vel_sp_pub(-1),
     _vel_ff_uorb_pub(-1),
+    _actuators_0_pub(-1),
 
 	_ref_alt(0.0f),
 	_ref_timestamp(0),
@@ -370,6 +371,7 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 	memset(&_global_vel_sp, 0, sizeof(_global_vel_sp));
     memset(&_vel_ff_uorb, 0, sizeof(_vel_ff_uorb));
     memset(&_traj_spline, 0, sizeof(_traj_spline));
+    memset(&_actuators, 0, sizeof(_actuators));
 
 	memset(&_ref_pos, 0, sizeof(_ref_pos));
 
@@ -390,6 +392,8 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 	_vel_ff.zero();
 	_sp_move_rate.zero();
     _acc_ff.zero();
+    _att_control.zero();
+    _thrust_sp = 0.0f;
 
 	_params_handles.thr_min		= param_find("MPC_THR_MIN");
 	_params_handles.thr_max		= param_find("MPC_THR_MAX");
@@ -997,7 +1001,7 @@ MulticopterTrajectoryControl::task_main()
 	_pos_sp_triplet_sub = orb_subscribe(ORB_ID(position_setpoint_triplet));
 	_local_pos_sp_sub = orb_subscribe(ORB_ID(vehicle_local_position_setpoint));
 	_global_vel_sp_sub = orb_subscribe(ORB_ID(vehicle_global_velocity_setpoint));
-    _traj_spline_sub = orb_subscribe(ORB_ID(trajectory_spline));
+    	_traj_spline_sub = orb_subscribe(ORB_ID(trajectory_spline));
 
 
 	parameters_update(true);
@@ -1008,13 +1012,10 @@ MulticopterTrajectoryControl::task_main()
 	/* get an initial update for all sensor and status data */
 	poll_subscriptions();
 
-	bool reset_int_z = true;
-	bool reset_int_xy = true;
 	bool was_armed = false;
-    _control_trajectory_started = false;
-    bool was_flag_control_trajectory_enabled = false;
+    	_control_trajectory_started = false;
+    	bool was_flag_control_trajectory_enabled = false;
 
-	hrt_abstime t_prev = 0;
 
 	math::Vector<3> thrust_int;
 	thrust_int.zero();
@@ -1059,16 +1060,14 @@ MulticopterTrajectoryControl::task_main()
 
 		hrt_abstime t = hrt_absolute_time();
         float t_sec = ((float)t)*0.000001f;
-		float dt = t_prev != 0 ? (t - t_prev) * 0.000001f : 0.0f;
-		t_prev = t;
+		//float dt = t_prev != 0 ? (t - t_prev) * 0.000001f : 0.0f;
+		//t_prev = t;
 
 		if (_control_mode.flag_armed && !was_armed) {
 			/* reset setpoints, integrals and trajectory on arming */
 			_reset_pos_sp = true;
 			_reset_alt_sp = true;
-			reset_int_z = true;
-			reset_int_xy = true;
-            reset_trajectory();
+            		reset_trajectory();
 		}
 
 		was_armed = _control_mode.flag_armed;
@@ -1190,223 +1189,20 @@ MulticopterTrajectoryControl::task_main()
 			 * Start of primary control calculations
 			 */
 
-			/* run position & altitude controllers */
-			math::Vector<3> pos_err = _pos_sp - _pos;
+			/* publish actuator controls */
+			_actuators.control[0] = (isfinite(_att_control(0))) ? _att_control(0) : 0.0f;
+			_actuators.control[1] = (isfinite(_att_control(1))) ? _att_control(1) : 0.0f;
+			_actuators.control[2] = (isfinite(_att_control(2))) ? _att_control(2) : 0.0f;
+			_actuators.control[3] = (isfinite(_thrust_sp)) ? _thrust_sp : 0.0f;
+			_actuators.timestamp = hrt_absolute_time();
 
-			_vel_sp = pos_err.emult(_params.pos_p) + _vel_ff;
-			
-			/* publish velocity feed forward term */
-			// Added by Ross Allen
-			_vel_ff_uorb.vx = _vel_ff(0);
-			_vel_ff_uorb.vy = _vel_ff(1);
-			_vel_ff_uorb.vz = _vel_ff(2);
-			
-			if (_vel_ff_uorb_pub > 0) {
-				orb_publish(ORB_ID(vehicle_velocity_feed_forward), _vel_ff_uorb_pub, &_vel_ff_uorb);
-			} else {
-				_vel_ff_uorb_pub = orb_advertise(ORB_ID(vehicle_velocity_feed_forward), &_vel_ff_uorb);
-			}
-
-
-			_global_vel_sp.vx = _vel_sp(0);
-			_global_vel_sp.vy = _vel_sp(1);
-			_global_vel_sp.vz = _vel_sp(2);
-
-			/* publish velocity setpoint */
-			if (_global_vel_sp_pub > 0) {
-				orb_publish(ORB_ID(vehicle_global_velocity_setpoint), _global_vel_sp_pub, &_global_vel_sp);
-
-			} else {
-				_global_vel_sp_pub = orb_advertise(ORB_ID(vehicle_global_velocity_setpoint), &_global_vel_sp);
-			}
-
-			/* reset integrals if needed */
-			if (reset_int_z) {
-				reset_int_z = false;
-				float i = _params.thr_min;
-
-				thrust_int(2) = -i;
-			}
-
-			if (reset_int_xy) {
-				reset_int_xy = false;
-				thrust_int(0) = 0.0f;
-				thrust_int(1) = 0.0f;
-			}
-
-
-			/* velocity error */
-			math::Vector<3> vel_err = _vel_sp - _vel;
-
-			/* derivative of velocity error */
-			math::Vector<3> vel_err_d;
-			vel_err_d.zero();
-			if (_control_mode.flag_control_trajectory_enabled){
-				/* make use of analytical knowledge of trajectory - Added by Ross Allen*/
-				vel_err_d  = _acc_ff - (_vel - _vel_prev) / dt + (_vel_ff - _vel).emult(_params.pos_p);
-			} else {
-				/* do not include setpoint acceleration for modes were you don't know it analytically*/
-				vel_err_d = (_sp_move_rate - _vel).emult(_params.pos_p) - (_vel - _vel_prev) / dt;
-			}
-			//~ math::Vector<3> vel_err_d = (vel_err - _vel_err_prev) / dt;     // Added by Ross Allen
-			_vel_prev = _vel;
-			//~ _vel_err_prev = vel_err;    // Added by Ross Allen
-
-			/* thrust vector in NED frame */
-			math::Vector<3> thrust_sp = vel_err.emult(_params.vel_p) + vel_err_d.emult(_params.vel_d) + thrust_int;
-
-			/* limit thrust vector and check for saturation */
-			bool saturation_xy = false;
-			bool saturation_z = false;
-
-			/* limit min lift */
-			float thr_min = _params.thr_min;
-
-
-			float tilt_max = _params.tilt_max_air;
-
-
-			/* limit min lift */
-			if (-thrust_sp(2) < thr_min) {
-				thrust_sp(2) = -thr_min;
-				saturation_z = true;
-			}
-
-			/* limit max tilt */
-			if (thr_min >= 0.0f && tilt_max < M_PI_F / 2 - 0.05f) {
-				/* absolute horizontal thrust */
-				float thrust_sp_xy_len = math::Vector<2>(thrust_sp(0), thrust_sp(1)).length();
-
-				if (thrust_sp_xy_len > 0.01f) {
-					/* max horizontal thrust for given vertical thrust*/
-					float thrust_xy_max = -thrust_sp(2) * tanf(tilt_max);
-
-					if (thrust_sp_xy_len > thrust_xy_max) {
-						float k = thrust_xy_max / thrust_sp_xy_len;
-						thrust_sp(0) *= k;
-						thrust_sp(1) *= k;
-						saturation_xy = true;
-					}
-				}
-			}
-
-
-			/* limit max thrust */
-			float thrust_abs = thrust_sp.length();
-
-			if (thrust_abs > _params.thr_max) {
-				if (thrust_sp(2) < 0.0f) {
-					if (-thrust_sp(2) > _params.thr_max) {
-						/* thrust Z component is too large, limit it */
-						thrust_sp(0) = 0.0f;
-						thrust_sp(1) = 0.0f;
-						thrust_sp(2) = -_params.thr_max;
-						saturation_xy = true;
-						saturation_z = true;
-
-					} else {
-						/* preserve thrust Z component and lower XY, keeping altitude is more important than position */
-						float thrust_xy_max = sqrtf(_params.thr_max * _params.thr_max - thrust_sp(2) * thrust_sp(2));
-						float thrust_xy_abs = math::Vector<2>(thrust_sp(0), thrust_sp(1)).length();
-						float k = thrust_xy_max / thrust_xy_abs;
-						thrust_sp(0) *= k;
-						thrust_sp(1) *= k;
-						saturation_xy = true;
-					}
+			if (_control_mode.flag_control_trajectory_enabled) {
+				if (_actuators_0_pub > 0) {
+					orb_publish(ORB_ID(actuator_controls_0), _actuators_0_pub, &_actuators);
 
 				} else {
-					/* Z component is negative, going down, simply limit thrust vector */
-					float k = _params.thr_max / thrust_abs;
-					thrust_sp *= k;
-					saturation_xy = true;
-					saturation_z = true;
+					_actuators_0_pub = orb_advertise(ORB_ID(actuator_controls_0), &_actuators);
 				}
-
-				thrust_abs = _params.thr_max;
-			}
-
-			/* update integrals */
-			if (!saturation_xy) {
-				thrust_int(0) += vel_err(0) * _params.vel_i(0) * dt;
-				thrust_int(1) += vel_err(1) * _params.vel_i(1) * dt;
-			}
-
-			if (!saturation_z) {
-				thrust_int(2) += vel_err(2) * _params.vel_i(2) * dt;
-
-				/* protection against flipping on ground when landing */
-				if (thrust_int(2) > 0.0f) {
-					thrust_int(2) = 0.0f;
-				}
-			}
-
-			/* calculate attitude setpoint from thrust vector */
-			/* desired body_z axis = -normalize(thrust_vector) */
-			math::Vector<3> body_x;
-			math::Vector<3> body_y;
-			math::Vector<3> body_z;
-
-			if (thrust_abs > SIGMA) {
-				body_z = -thrust_sp / thrust_abs;
-
-			} else {
-				/* no thrust, set Z axis to safe value */
-				body_z.zero();
-				body_z(2) = 1.0f;
-			}
-
-			/* vector of desired yaw direction in XY plane, rotated by PI/2 */
-			math::Vector<3> y_C(-sinf(_att_sp.yaw_body), cosf(_att_sp.yaw_body), 0.0f);
-
-			if (fabsf(body_z(2)) > SIGMA) {
-				/* desired body_x axis, orthogonal to body_z */
-				body_x = y_C % body_z;
-
-				/* keep nose to front while inverted upside down */
-				if (body_z(2) < 0.0f) {
-					body_x = -body_x;
-				}
-
-				body_x.normalize();
-
-			} else {
-				/* desired thrust is in XY plane, set X downside to construct correct matrix,
-				 * but yaw component will not be used actually */
-				body_x.zero();
-				body_x(2) = 1.0f;
-			}
-
-			/* desired body_y axis */
-			body_y = body_z % body_x;
-
-			/* fill rotation matrix */
-			for (int i = 0; i < 3; i++) {
-				R(i, 0) = body_x(i);
-				R(i, 1) = body_y(i);
-				R(i, 2) = body_z(i);
-			}
-
-			/* copy rotation matrix to attitude setpoint topic */
-			memcpy(&_att_sp.R_body[0][0], R.data, sizeof(_att_sp.R_body));
-			_att_sp.R_valid = true;
-
-			/* calculate euler angles, for logging only, must not be used for control */
-			math::Vector<3> euler = R.to_euler();
-			_att_sp.roll_body = euler(0);
-			_att_sp.pitch_body = euler(1);
-			/* yaw already used to construct rot matrix, but actual rotation matrix can have different yaw near singularity */
-
-
-			_att_sp.thrust = thrust_abs;
-
-			_att_sp.timestamp = hrt_absolute_time();
-
-			/* publish attitude setpoint */
-			if (_att_sp_pub > 0) {
-				orb_publish(ORB_ID(vehicle_attitude_setpoint), _att_sp_pub, &_att_sp);
-
-			} else {
-				_att_sp_pub = orb_advertise(ORB_ID(vehicle_attitude_setpoint), &_att_sp);
 			}
 
 
@@ -1414,8 +1210,6 @@ MulticopterTrajectoryControl::task_main()
 			/* trajectory controller disabled, reset setpoints */
 			_reset_alt_sp = true;
 			_reset_pos_sp = true;
-			reset_int_z = true;
-			reset_int_xy = true;
 		}
         
         /* record state of trajectory control mode for next iteration */

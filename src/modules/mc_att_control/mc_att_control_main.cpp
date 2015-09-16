@@ -785,33 +785,17 @@ MulticopterAttitudeControl::task_main()
 			vehicle_control_mode_poll();
 			arming_status_poll();
 			vehicle_manual_poll();
-
-			if (_v_control_mode.flag_control_attitude_enabled) {
-				control_attitude(dt);
-
-				/* publish attitude rates setpoint */
-				_v_rates_sp.roll = _rates_sp(0);
-				_v_rates_sp.pitch = _rates_sp(1);
-				_v_rates_sp.yaw = _rates_sp(2);
-				_v_rates_sp.thrust = _thrust_sp;
-				_v_rates_sp.timestamp = hrt_absolute_time();
-
-				if (_v_rates_sp_pub > 0) {
-					orb_publish(ORB_ID(vehicle_rates_setpoint), _v_rates_sp_pub, &_v_rates_sp);
-
-				} else {
-					_v_rates_sp_pub = orb_advertise(ORB_ID(vehicle_rates_setpoint), &_v_rates_sp);
-				}
-
+			
+			if (_v_control_mode.flag_control_trajectory_enabled) {
+				
+				/* if peforming trajectory control, do nothing and let
+				 * mc_traj_control take over
+				 */
+				 
 			} else {
-				/* attitude controller disabled, poll rates setpoint topic */
-				if (_v_control_mode.flag_control_manual_enabled) {
-					/* manual rates control - ACRO mode */
-					_rates_sp = math::Vector<3>(_manual_control_sp.y, -_manual_control_sp.x, _manual_control_sp.r).emult(_params.acro_rate_max);
-					_thrust_sp = _manual_control_sp.z;
-
-					/* reset yaw setpoint after ACRO */
-					_reset_yaw_sp = true;
+				
+				if (_v_control_mode.flag_control_attitude_enabled) {
+					control_attitude(dt);
 
 					/* publish attitude rates setpoint */
 					_v_rates_sp.roll = _rates_sp(0);
@@ -829,32 +813,57 @@ MulticopterAttitudeControl::task_main()
 
 				} else {
 					/* attitude controller disabled, poll rates setpoint topic */
-					vehicle_rates_setpoint_poll();
-					_rates_sp(0) = _v_rates_sp.roll;
-					_rates_sp(1) = _v_rates_sp.pitch;
-					_rates_sp(2) = _v_rates_sp.yaw;
-					_thrust_sp = _v_rates_sp.thrust;
-				}
-			}
+					if (_v_control_mode.flag_control_manual_enabled) {
+						/* manual rates control - ACRO mode */
+						_rates_sp = math::Vector<3>(_manual_control_sp.y, -_manual_control_sp.x, _manual_control_sp.r).emult(_params.acro_rate_max);
+						_thrust_sp = _manual_control_sp.z;
 
-			if (_v_control_mode.flag_control_rates_enabled) {
-				control_attitude_rates(dt);
+						/* reset yaw setpoint after ACRO */
+						_reset_yaw_sp = true;
 
-				/* publish actuator controls */
-				_actuators.control[0] = (isfinite(_att_control(0))) ? _att_control(0) : 0.0f;
-				_actuators.control[1] = (isfinite(_att_control(1))) ? _att_control(1) : 0.0f;
-				_actuators.control[2] = (isfinite(_att_control(2))) ? _att_control(2) : 0.0f;
-				_actuators.control[3] = (isfinite(_thrust_sp)) ? _thrust_sp : 0.0f;
-				_actuators.timestamp = hrt_absolute_time();
+						/* publish attitude rates setpoint */
+						_v_rates_sp.roll = _rates_sp(0);
+						_v_rates_sp.pitch = _rates_sp(1);
+						_v_rates_sp.yaw = _rates_sp(2);
+						_v_rates_sp.thrust = _thrust_sp;
+						_v_rates_sp.timestamp = hrt_absolute_time();
 
-				if (!_actuators_0_circuit_breaker_enabled) {
-					if (_actuators_0_pub > 0) {
-						orb_publish(ORB_ID(actuator_controls_0), _actuators_0_pub, &_actuators);
+						if (_v_rates_sp_pub > 0) {
+							orb_publish(ORB_ID(vehicle_rates_setpoint), _v_rates_sp_pub, &_v_rates_sp);
+
+						} else {
+							_v_rates_sp_pub = orb_advertise(ORB_ID(vehicle_rates_setpoint), &_v_rates_sp);
+						}
 
 					} else {
-						_actuators_0_pub = orb_advertise(ORB_ID(actuator_controls_0), &_actuators);
+						/* attitude controller disabled, poll rates setpoint topic */
+						vehicle_rates_setpoint_poll();
+						_rates_sp(0) = _v_rates_sp.roll;
+						_rates_sp(1) = _v_rates_sp.pitch;
+						_rates_sp(2) = _v_rates_sp.yaw;
+						_thrust_sp = _v_rates_sp.thrust;
 					}
 				}
+
+				if (_v_control_mode.flag_control_rates_enabled) {
+					control_attitude_rates(dt);
+
+					/* publish actuator controls */
+					_actuators.control[0] = (isfinite(_att_control(0))) ? _att_control(0) : 0.0f;
+					_actuators.control[1] = (isfinite(_att_control(1))) ? _att_control(1) : 0.0f;
+					_actuators.control[2] = (isfinite(_att_control(2))) ? _att_control(2) : 0.0f;
+					_actuators.control[3] = (isfinite(_thrust_sp)) ? _thrust_sp : 0.0f;
+					_actuators.timestamp = hrt_absolute_time();
+
+					if (!_actuators_0_circuit_breaker_enabled) {
+						if (_actuators_0_pub > 0) {
+							orb_publish(ORB_ID(actuator_controls_0), _actuators_0_pub, &_actuators);
+
+						} else {
+							_actuators_0_pub = orb_advertise(ORB_ID(actuator_controls_0), &_actuators);
+						}
+					}
+				}	
 			}
 		}
 
