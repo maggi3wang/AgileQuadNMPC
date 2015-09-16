@@ -63,7 +63,6 @@
 #include <uORB/topics/actuator_armed.h>
 #include <uORB/topics/parameter_update.h>
 #include <uORB/topics/vehicle_local_position.h>
-#include <uORB/topics/position_setpoint_triplet.h>
 #include <uORB/topics/vehicle_global_velocity_setpoint.h>
 #include <uORB/topics/vehicle_velocity_feed_forward.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
@@ -134,13 +133,12 @@ private:
 	int		_manual_sub;			/**< notification of manual control updates */
 	int		_arming_sub;			/**< arming status of outputs */
 	int		_local_pos_sub;			/**< vehicle local position */
-	int		_pos_sp_triplet_sub;	/**< position setpoint triplet */
-	int		_local_pos_sp_sub;		/**< offboard local position setpoint */
+	int		_local_pos_nom_sub;		/**< offboard local position setpoint */
 	int		_global_vel_sp_sub;		/**< offboard global velocity setpoint */
     int     _traj_spline_sub;       /**< trajectory spline */
 
 	orb_advert_t	_att_sp_pub;			/**< attitude setpoint publication */
-	orb_advert_t	_local_pos_sp_pub;		/**< vehicle local position setpoint publication */
+	orb_advert_t	_local_pos_nom_pub;		/**< vehicle local position setpoint publication */
 	orb_advert_t	_global_vel_sp_pub;		/**< vehicle global velocity setpoint publication */
     orb_advert_t    _vel_ff_uorb_pub;       /**< vehicle velocity feed forward publication */
     orb_advert_t	_actuators_0_pub;		/**< attitude actuator controls publication */
@@ -151,8 +149,7 @@ private:
 	struct vehicle_control_mode_s			_control_mode;	/**< vehicle control mode */
 	struct actuator_armed_s				_arming;		/**< actuator arming status */
 	struct vehicle_local_position_s			_local_pos;		/**< vehicle local position */
-	struct position_setpoint_triplet_s		_pos_sp_triplet;	/**< vehicle global position setpoint triplet */
-	struct vehicle_local_position_setpoint_s	_local_pos_sp;		/**< vehicle local position setpoint */
+	struct vehicle_local_position_setpoint_s	_local_pos_nom;		/**< vehicle local position setpoint */
 	struct vehicle_global_velocity_setpoint_s	_global_vel_sp;	/**< vehicle global velocity setpoint */
     struct vehicle_velocity_feed_forward_s      _vel_ff_uorb;   /**< vehicle velocity feed forward term */
     struct trajectory_spline_s  _traj_spline;   /**< trajectory spline */
@@ -198,12 +195,12 @@ private:
 	float _ref_alt;
 	hrt_abstime _ref_timestamp;
 
-	bool _reset_pos_sp;
+	bool _reset_pos_nom;
 	bool _reset_alt_sp;
     bool _control_trajectory_started;
     
 	math::Vector<3> _pos;
-	math::Vector<3> _pos_sp;
+	math::Vector<3> _pos_nom;
 	math::Vector<3> _vel;
 	math::Vector<3> _vel_sp;
 	math::Vector<3> _vel_prev;			/**< velocity on previous step */
@@ -258,7 +255,7 @@ private:
 	/**
 	 * Reset position setpoint to current position
 	 */
-	void		reset_pos_sp();
+	void		reset_pos_nom();
 
 	/**
 	 * Reset altitude setpoint to current altitude
@@ -268,7 +265,7 @@ private:
 	/**
 	 * Check if position setpoint is too far from current position and adjust it if needed.
 	 */
-	void		limit_pos_sp_offset();
+	void		limit_pos_nom_offset();
 
 
 	/**
@@ -343,13 +340,12 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 	_manual_sub(-1),
 	_arming_sub(-1),
 	_local_pos_sub(-1),
-	_pos_sp_triplet_sub(-1),
 	_global_vel_sp_sub(-1),
     _traj_spline_sub(-1),
 
 /* publications */
 	_att_sp_pub(-1),
-	_local_pos_sp_pub(-1),
+	_local_pos_nom_pub(-1),
 	_global_vel_sp_pub(-1),
     _vel_ff_uorb_pub(-1),
     _actuators_0_pub(-1),
@@ -357,7 +353,7 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 	_ref_alt(0.0f),
 	_ref_timestamp(0),
 
-	_reset_pos_sp(true),
+	_reset_pos_nom(true),
 	_reset_alt_sp(true)
 {
 	memset(&_att, 0, sizeof(_att));
@@ -366,8 +362,7 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 	memset(&_control_mode, 0, sizeof(_control_mode));
 	memset(&_arming, 0, sizeof(_arming));
 	memset(&_local_pos, 0, sizeof(_local_pos));
-	memset(&_pos_sp_triplet, 0, sizeof(_pos_sp_triplet));
-	memset(&_local_pos_sp, 0, sizeof(_local_pos_sp));
+	memset(&_local_pos_nom, 0, sizeof(_local_pos_nom));
 	memset(&_global_vel_sp, 0, sizeof(_global_vel_sp));
     memset(&_vel_ff_uorb, 0, sizeof(_vel_ff_uorb));
     memset(&_traj_spline, 0, sizeof(_traj_spline));
@@ -384,7 +379,7 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 	_params.sp_offs_max.zero();
 
 	_pos.zero();
-	_pos_sp.zero();
+	_pos_nom.zero();
 	_vel.zero();
 	_vel_sp.zero();
 	_vel_prev.zero();
@@ -654,8 +649,8 @@ MulticopterTrajectoryControl::update_ref()
 
 		if (_ref_timestamp != 0) {
 			/* calculate current position setpoint in global frame */
-			map_projection_reproject(&_ref_pos, _pos_sp(0), _pos_sp(1), &lat_sp, &lon_sp);
-			alt_sp = _ref_alt - _pos_sp(2);
+			map_projection_reproject(&_ref_pos, _pos_nom(0), _pos_nom(1), &lat_sp, &lon_sp);
+			alt_sp = _ref_alt - _pos_nom(2);
 		}
 
 		/* update local projection reference */
@@ -664,8 +659,8 @@ MulticopterTrajectoryControl::update_ref()
 
 		if (_ref_timestamp != 0) {
 			/* reproject position setpoint to new reference */
-			map_projection_project(&_ref_pos, lat_sp, lon_sp, &_pos_sp.data[0], &_pos_sp.data[1]);
-			_pos_sp(2) = -(alt_sp - _ref_alt);
+			map_projection_project(&_ref_pos, lat_sp, lon_sp, &_pos_nom.data[0], &_pos_nom.data[1]);
+			_pos_nom(2) = -(alt_sp - _ref_alt);
 		}
 
 		_ref_timestamp = _local_pos.ref_timestamp;
@@ -673,16 +668,16 @@ MulticopterTrajectoryControl::update_ref()
 }
 
 void
-MulticopterTrajectoryControl::reset_pos_sp()
+MulticopterTrajectoryControl::reset_pos_nom()
 {
-	if (_reset_pos_sp) {
-		_reset_pos_sp = false;
+	if (_reset_pos_nom) {
+		_reset_pos_nom = false;
 		/* shift position setpoint to make attitude setpoint continuous */
-		_pos_sp(0) = _pos(0) + (_vel(0) - _att_sp.R_body[0][2] * _att_sp.thrust / _params.vel_p(0)
+		_pos_nom(0) = _pos(0) + (_vel(0) - _att_sp.R_body[0][2] * _att_sp.thrust / _params.vel_p(0)
 				- _params.vel_ff(0) * _sp_move_rate(0)) / _params.pos_p(0);
-		_pos_sp(1) = _pos(1) + (_vel(1) - _att_sp.R_body[1][2] * _att_sp.thrust / _params.vel_p(1)
+		_pos_nom(1) = _pos(1) + (_vel(1) - _att_sp.R_body[1][2] * _att_sp.thrust / _params.vel_p(1)
 				- _params.vel_ff(1) * _sp_move_rate(1)) / _params.pos_p(1);
-		mavlink_log_info(_mavlink_fd, "[mpc] reset pos sp: %.2f, %.2f", (double)_pos_sp(0), (double)_pos_sp(1));
+		mavlink_log_info(_mavlink_fd, "[mpc] reset pos sp: %.2f, %.2f", (double)_pos_nom(0), (double)_pos_nom(1));
 	}
 }
 
@@ -691,29 +686,29 @@ MulticopterTrajectoryControl::reset_alt_sp()
 {
 	if (_reset_alt_sp) {
 		_reset_alt_sp = false;
-		_pos_sp(2) = _pos(2) + (_vel(2) - _params.vel_ff(2) * _sp_move_rate(2)) / _params.pos_p(2);
-		mavlink_log_info(_mavlink_fd, "[mpc] reset alt sp: %.2f", -(double)_pos_sp(2));
+		_pos_nom(2) = _pos(2) + (_vel(2) - _params.vel_ff(2) * _sp_move_rate(2)) / _params.pos_p(2);
+		mavlink_log_info(_mavlink_fd, "[mpc] reset alt sp: %.2f", -(double)_pos_nom(2));
 	}
 }
 
 void
-MulticopterTrajectoryControl::limit_pos_sp_offset()
+MulticopterTrajectoryControl::limit_pos_nom_offset()
 {
 	math::Vector<3> pos_sp_offs;
 	pos_sp_offs.zero();
 
 
-	pos_sp_offs(0) = (_pos_sp(0) - _pos(0)) / _params.sp_offs_max(0);
-	pos_sp_offs(1) = (_pos_sp(1) - _pos(1)) / _params.sp_offs_max(1);
+	pos_sp_offs(0) = (_pos_nom(0) - _pos(0)) / _params.sp_offs_max(0);
+	pos_sp_offs(1) = (_pos_nom(1) - _pos(1)) / _params.sp_offs_max(1);
 
-	pos_sp_offs(2) = (_pos_sp(2) - _pos(2)) / _params.sp_offs_max(2);
+	pos_sp_offs(2) = (_pos_nom(2) - _pos(2)) / _params.sp_offs_max(2);
 
 
 	float pos_sp_offs_norm = pos_sp_offs.length();
 
 	if (pos_sp_offs_norm > 1.0f) {
 		pos_sp_offs /= pos_sp_offs_norm;
-		_pos_sp = _pos + pos_sp_offs.emult(_params.sp_offs_max);
+		_pos_nom = _pos + pos_sp_offs.emult(_params.sp_offs_max);
 	}
 }
 
@@ -745,21 +740,22 @@ MulticopterTrajectoryControl::cross_sphere_line(const math::Vector<3>& sphere_c,
 }
 
 /* Added by Ross Allen */
+/** TO BE REMOVED */
 void
 MulticopterTrajectoryControl::control_periodic_trajectory(float t, float dt)
 {
     //~ /* Just force a static setpoint for now */
-    //~ _pos_sp(0) = ASL_LAB_CENTER_X;
-	//~ _pos_sp(1) = ASL_LAB_CENTER_Y;
-	//~ _pos_sp(2) = ASL_LAB_CENTER_Z;
+    //~ _pos_nom(0) = ASL_LAB_CENTER_X;
+	//~ _pos_nom(1) = ASL_LAB_CENTER_Y;
+	//~ _pos_nom(2) = ASL_LAB_CENTER_Z;
     //~ _att_sp.yaw_body = ASL_LAB_CENTER_YAW;
     
     float pi_f = (float)M_PI;
     
     /* Simple circular trajectory */
-    //~ _pos_sp(0) = 0.5f*(float)cos((double)(2.0f*t/5.0f)*M_PI) + ASL_LAB_CENTER_X;
-    //~ _pos_sp(1) = 0.5f*(float)sin((double)(2.0f*t/5.0f)*M_PI) + ASL_LAB_CENTER_Y;
-    //~ _pos_sp(2) = 0.5f*(float)cos((double)(2.0f*t/20.0f)*M_PI) + ASL_LAB_CENTER_Z;
+    //~ _pos_nom(0) = 0.5f*(float)cos((double)(2.0f*t/5.0f)*M_PI) + ASL_LAB_CENTER_X;
+    //~ _pos_nom(1) = 0.5f*(float)sin((double)(2.0f*t/5.0f)*M_PI) + ASL_LAB_CENTER_Y;
+    //~ _pos_nom(2) = 0.5f*(float)cos((double)(2.0f*t/20.0f)*M_PI) + ASL_LAB_CENTER_Z;
     //~ _att_sp.yaw_body = ASL_LAB_CENTER_YAW;
     //~ 
     //~ _vel_ff(0) = 0.5f*(2.0f/5.0f)*((float)M_PI)*(-(float)sin((double)(2.0f*t/5.0f)*M_PI));
@@ -770,9 +766,9 @@ MulticopterTrajectoryControl::control_periodic_trajectory(float t, float dt)
     float omega_z = 2.0f*pi_f/20.0f;
     float amp_xy = 0.5f;
     float amp_z = 0.5f;
-    _pos_sp(0) = amp_xy*(float)cos(omega_xy*t) + ASL_LAB_CENTER_X;
-    _pos_sp(1) = amp_xy*(float)sin(omega_xy*t) + ASL_LAB_CENTER_Y;
-    _pos_sp(2) = amp_xy*(float)cos(omega_z*t) + ASL_LAB_CENTER_Z;
+    _pos_nom(0) = amp_xy*(float)cos(omega_xy*t) + ASL_LAB_CENTER_X;
+    _pos_nom(1) = amp_xy*(float)sin(omega_xy*t) + ASL_LAB_CENTER_Y;
+    _pos_nom(2) = amp_xy*(float)cos(omega_z*t) + ASL_LAB_CENTER_Z;
     _att_sp.yaw_body = ASL_LAB_CENTER_YAW;
     
     _vel_ff(0) = amp_xy*omega_xy*(-(float)sin(omega_xy*t));
@@ -786,6 +782,7 @@ MulticopterTrajectoryControl::control_periodic_trajectory(float t, float dt)
 }
 
 /* Added by Ross Allen */
+/** TO BE REMOVED */
 void
 MulticopterTrajectoryControl::control_spline_trajectory(float t, float start_t)
 {
@@ -809,9 +806,9 @@ MulticopterTrajectoryControl::control_spline_trajectory(float t, float start_t)
     
     if (cur_spline_t <= 0) {
         
-        _pos_sp(0) = poly_eval(_x_coefs.at(0), 0.0f);
-        _pos_sp(1) = poly_eval(_y_coefs.at(0), 0.0f);
-        _pos_sp(2) = poly_eval(_z_coefs.at(0), 0.0f);
+        _pos_nom(0) = poly_eval(_x_coefs.at(0), 0.0f);
+        _pos_nom(1) = poly_eval(_y_coefs.at(0), 0.0f);
+        _pos_nom(2) = poly_eval(_z_coefs.at(0), 0.0f);
         _att_sp.yaw_body = poly_eval(_yaw_coefs.at(0), 0.0f);
         
         _vel_ff(0) = 0.0f;
@@ -824,9 +821,9 @@ MulticopterTrajectoryControl::control_spline_trajectory(float t, float start_t)
         
     } else if (cur_spline_t > 0 && cur_spline_t < spline_term_t) {
     
-        _pos_sp(0) = poly_eval(_x_coefs.at(cur_seg), cur_poly_t);
-        _pos_sp(1) = poly_eval(_y_coefs.at(cur_seg), cur_poly_t);
-        _pos_sp(2) = poly_eval(_z_coefs.at(cur_seg), cur_poly_t);
+        _pos_nom(0) = poly_eval(_x_coefs.at(cur_seg), cur_poly_t);
+        _pos_nom(1) = poly_eval(_y_coefs.at(cur_seg), cur_poly_t);
+        _pos_nom(2) = poly_eval(_z_coefs.at(cur_seg), cur_poly_t);
         _att_sp.yaw_body = poly_eval(_yaw_coefs.at(cur_seg), cur_poly_t);
         
         _vel_ff(0) = poly_eval(_xv_coefs.at(cur_seg), cur_poly_t);
@@ -839,9 +836,79 @@ MulticopterTrajectoryControl::control_spline_trajectory(float t, float start_t)
     
     } else {
         
-        _pos_sp(0) = poly_eval(_x_coefs.at(_x_coefs.size()-1), poly_term_t);
-        _pos_sp(1) = poly_eval(_y_coefs.at(_y_coefs.size()-1), poly_term_t);
-        _pos_sp(2) = poly_eval(_z_coefs.at(_z_coefs.size()-1), poly_term_t);
+        _pos_nom(0) = poly_eval(_x_coefs.at(_x_coefs.size()-1), poly_term_t);
+        _pos_nom(1) = poly_eval(_y_coefs.at(_y_coefs.size()-1), poly_term_t);
+        _pos_nom(2) = poly_eval(_z_coefs.at(_z_coefs.size()-1), poly_term_t);
+        _att_sp.yaw_body = poly_eval(_yaw_coefs.at(_yaw_coefs.size()-1), poly_term_t);
+        
+        _vel_ff(0) = 0.0f;
+        _vel_ff(1) = 0.0f;
+        _vel_ff(2) = 0.0f;
+        
+        _acc_ff(0) = 0.0f;
+        _acc_ff(1) = 0.0f;
+        _acc_ff(2) = 0.0f;
+    }
+    
+}
+
+/* Calculate the nominal state variables for the trajectory at the current time */
+void
+MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_t)
+{
+    
+    /* TODO: verify this works for single polynomial segment spline */
+    
+    // determine time in spline trajectory
+    float cur_spline_t = t - start_t;
+    float spline_term_t = _spline_cumt_sec.at(_spline_cumt_sec.size()-1);
+    
+    // determine polynomial segment being evaluated
+    std::vector<float>::iterator seg_it;
+    seg_it = std::lower_bound(_spline_cumt_sec.begin(), 
+        _spline_cumt_sec.end(), cur_spline_t);
+    int cur_seg = (int)(seg_it - _spline_cumt_sec.begin());
+    
+    // determine time in polynomial segment
+    float cur_poly_t = cur_seg == 0 ? cur_spline_t :
+                cur_spline_t - _spline_cumt_sec.at(cur_seg-1);
+    float poly_term_t = cur_seg == 0 ? 0.0f : _spline_delt_sec.at(cur_seg-1);
+    
+    if (cur_spline_t <= 0) {
+        
+        _pos_nom(0) = poly_eval(_x_coefs.at(0), 0.0f);
+        _pos_nom(1) = poly_eval(_y_coefs.at(0), 0.0f);
+        _pos_nom(2) = poly_eval(_z_coefs.at(0), 0.0f);
+        _att_sp.yaw_body = poly_eval(_yaw_coefs.at(0), 0.0f);
+        
+        _vel_ff(0) = 0.0f;
+        _vel_ff(1) = 0.0f;
+        _vel_ff(2) = 0.0f;
+        
+        _acc_ff(0) = 0.0f;
+        _acc_ff(1) = 0.0f;
+        _acc_ff(2) = 0.0f;
+        
+    } else if (cur_spline_t > 0 && cur_spline_t < spline_term_t) {
+    
+        _pos_nom(0) = poly_eval(_x_coefs.at(cur_seg), cur_poly_t);
+        _pos_nom(1) = poly_eval(_y_coefs.at(cur_seg), cur_poly_t);
+        _pos_nom(2) = poly_eval(_z_coefs.at(cur_seg), cur_poly_t);
+        _att_sp.yaw_body = poly_eval(_yaw_coefs.at(cur_seg), cur_poly_t);
+        
+        _vel_ff(0) = poly_eval(_xv_coefs.at(cur_seg), cur_poly_t);
+        _vel_ff(1) = poly_eval(_yv_coefs.at(cur_seg), cur_poly_t);
+        _vel_ff(2) = poly_eval(_zv_coefs.at(cur_seg), cur_poly_t);
+        
+        _acc_ff(0) = poly_eval(_xa_coefs.at(cur_seg), cur_poly_t);
+        _acc_ff(1) = poly_eval(_ya_coefs.at(cur_seg), cur_poly_t);
+        _acc_ff(2) = poly_eval(_za_coefs.at(cur_seg), cur_poly_t);
+    
+    } else {
+        
+        _pos_nom(0) = poly_eval(_x_coefs.at(_x_coefs.size()-1), poly_term_t);
+        _pos_nom(1) = poly_eval(_y_coefs.at(_y_coefs.size()-1), poly_term_t);
+        _pos_nom(2) = poly_eval(_z_coefs.at(_z_coefs.size()-1), poly_term_t);
         _att_sp.yaw_body = poly_eval(_yaw_coefs.at(_yaw_coefs.size()-1), poly_term_t);
         
         _vel_ff(0) = 0.0f;
@@ -861,7 +928,7 @@ MulticopterTrajectoryControl::trajectory_hold()
 {
         
     reset_alt_sp();
-    reset_pos_sp();
+    reset_pos_nom();
     
     _vel_ff(0) = 0.0f;
     _vel_ff(1) = 0.0f;
@@ -881,7 +948,7 @@ MulticopterTrajectoryControl::reset_trajectory()
     memset(&_traj_spline, 0, sizeof(_traj_spline));
     _control_trajectory_started = false;
     reset_alt_sp();
-    reset_pos_sp();
+    reset_pos_nom();
         
 }
 
@@ -998,8 +1065,7 @@ MulticopterTrajectoryControl::task_main()
 	_manual_sub = orb_subscribe(ORB_ID(manual_control_setpoint));
 	_arming_sub = orb_subscribe(ORB_ID(actuator_armed));
 	_local_pos_sub = orb_subscribe(ORB_ID(vehicle_local_position));
-	_pos_sp_triplet_sub = orb_subscribe(ORB_ID(position_setpoint_triplet));
-	_local_pos_sp_sub = orb_subscribe(ORB_ID(vehicle_local_position_setpoint));
+	_local_pos_nom_sub = orb_subscribe(ORB_ID(vehicle_local_position_setpoint));
 	_global_vel_sp_sub = orb_subscribe(ORB_ID(vehicle_global_velocity_setpoint));
     	_traj_spline_sub = orb_subscribe(ORB_ID(trajectory_spline));
 
@@ -1013,8 +1079,8 @@ MulticopterTrajectoryControl::task_main()
 	poll_subscriptions();
 
 	bool was_armed = false;
-    	_control_trajectory_started = false;
-    	bool was_flag_control_trajectory_enabled = false;
+    _control_trajectory_started = false;
+    bool was_flag_control_trajectory_enabled = false;
 
 
 	math::Vector<3> thrust_int;
@@ -1065,7 +1131,7 @@ MulticopterTrajectoryControl::task_main()
 
 		if (_control_mode.flag_armed && !was_armed) {
 			/* reset setpoints, integrals and trajectory on arming */
-			_reset_pos_sp = true;
+			_reset_pos_nom = true;
 			_reset_alt_sp = true;
             		reset_trajectory();
 		}
@@ -1073,6 +1139,20 @@ MulticopterTrajectoryControl::task_main()
 		was_armed = _control_mode.flag_armed;
 
 		update_ref();
+		
+		    /* reset trajectory start time */
+            if (!_control_mode.flag_control_trajectory_enabled &&
+                _control_trajectory_started){
+            
+                _control_trajectory_started = false;
+            }
+            
+            /* reset trajectory data when switched out of traj control */
+            if (!_control_mode.flag_control_trajectory_enabled &&
+                was_flag_control_trajectory_enabled){
+            
+                reset_trajectory();
+            }
         
 
 		if (_control_mode.flag_control_trajectory_enabled) {
@@ -1096,7 +1176,7 @@ MulticopterTrajectoryControl::task_main()
 				// in case of interupted trajectory, make sure to 
 				// hold at current position instead of going
 				_reset_alt_sp = true;
-				_reset_pos_sp = true;
+				_reset_pos_nom = true;
 			
 				// Initial computations at start of trajectory
 				if (!_control_trajectory_started) {
@@ -1153,35 +1233,21 @@ MulticopterTrajectoryControl::task_main()
 				trajectory_hold();
 				
 			}
-
-            
-            /* reset trajectory start time */
-            if (!_control_mode.flag_control_trajectory_enabled &&
-                _control_trajectory_started){
-            
-                _control_trajectory_started = false;
-            }
-            
-            /* reset trajectory data when switched out of traj control */
-            if (!_control_mode.flag_control_trajectory_enabled &&
-                was_flag_control_trajectory_enabled){
-            
-                reset_trajectory();
-            }                  
+                  
 
 			/* fill local position setpoint */
-			_local_pos_sp.timestamp = hrt_absolute_time();
-			_local_pos_sp.x = _pos_sp(0);
-			_local_pos_sp.y = _pos_sp(1);
-			_local_pos_sp.z = _pos_sp(2);
-			_local_pos_sp.yaw = _att_sp.yaw_body;
+			_local_pos_nom.timestamp = hrt_absolute_time();
+			_local_pos_nom.x = _pos_nom(0);
+			_local_pos_nom.y = _pos_nom(1);
+			_local_pos_nom.z = _pos_nom(2);
+			_local_pos_nom.yaw = _att_sp.yaw_body;
 
 			/* publish local position setpoint */
-			if (_local_pos_sp_pub > 0) {
-				orb_publish(ORB_ID(vehicle_local_position_setpoint), _local_pos_sp_pub, &_local_pos_sp);
+			if (_local_pos_nom_pub > 0) {
+				orb_publish(ORB_ID(vehicle_local_position_setpoint), _local_pos_nom_pub, &_local_pos_nom);
 
 			} else {
-				_local_pos_sp_pub = orb_advertise(ORB_ID(vehicle_local_position_setpoint), &_local_pos_sp);
+				_local_pos_nom_pub = orb_advertise(ORB_ID(vehicle_local_position_setpoint), &_local_pos_nom);
 			}
 
 
@@ -1200,7 +1266,7 @@ MulticopterTrajectoryControl::task_main()
 				if (_actuators_0_pub > 0) {
 					orb_publish(ORB_ID(actuator_controls_0), _actuators_0_pub, &_actuators);
 					
-					printf("DEBUG: publishing on actuator_controls_0\n");
+					//printf("DEBUG: publishing on actuator_controls_0\n");
 
 				} else {
 					_actuators_0_pub = orb_advertise(ORB_ID(actuator_controls_0), &_actuators);
@@ -1211,7 +1277,7 @@ MulticopterTrajectoryControl::task_main()
 		} else {
 			/* trajectory controller disabled, reset setpoints */
 			_reset_alt_sp = true;
-			_reset_pos_sp = true;
+			_reset_pos_nom = true;
 		}
         
         /* record state of trajectory control mode for next iteration */
