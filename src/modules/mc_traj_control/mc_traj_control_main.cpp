@@ -1037,11 +1037,8 @@ MulticopterTrajectoryControl::task_main()
 	fds[0].fd = _local_pos_sub;
 	fds[0].events = POLLIN;
 	
-	// DEBUG compiler and linker
-	printf("Hello Sky!\n");
 
-	//~ while (!_task_should_exit) {
-	while (0) {
+	while (!_task_should_exit) {
 		
         /* wait for up to 500ms for data */
 		int pret = poll(&fds[0], (sizeof(fds) / sizeof(fds[0])), 500);
