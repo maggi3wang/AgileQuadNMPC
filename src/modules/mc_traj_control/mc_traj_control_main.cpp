@@ -357,7 +357,7 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 	_ref_timestamp(0),
 
 	_reset_pos_sp(true),
-	_reset_alt_sp(true),
+	_reset_alt_sp(true)
 {
 	memset(&_att, 0, sizeof(_att));
 	memset(&_att_sp, 0, sizeof(_att_sp));
@@ -1039,7 +1039,6 @@ MulticopterTrajectoryControl::task_main()
 	
 	// DEBUG compiler and linker
 	printf("Hello Sky!\n");
-	return OK;
 
 	//~ while (!_task_should_exit) {
 	while (0) {

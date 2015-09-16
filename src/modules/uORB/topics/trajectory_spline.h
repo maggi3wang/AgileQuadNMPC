@@ -25,7 +25,7 @@
  * @{
  */
  
-struct trajectory_segment_s {
+struct __EXPORT trajectory_segment_s {
 	float Tdel;     // time length of segment
     uint8_t nSeg;   // total number of segments in spline
     uint8_t curSeg;     // current segment in spline
