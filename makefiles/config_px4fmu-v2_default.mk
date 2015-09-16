@@ -91,6 +91,7 @@ MODULES		+= examples/flow_position_estimator
 #MODULES		+= modules/segway # XXX Needs GCC 4.7 fix
 MODULES		+= modules/mc_att_control
 MODULES		+= modules/mc_pos_control
+MODULES		+= modules/mc_traj_control
 
 #
 # Logging

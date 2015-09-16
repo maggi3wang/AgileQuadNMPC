@@ -60,6 +60,7 @@ MODULES		+= modules/position_estimator_inav
 #
 MODULES		+= modules/mc_att_control
 MODULES		+= modules/mc_pos_control
+MODULES		+= modules/mc_traj_control
 
 #
 # Library modules
