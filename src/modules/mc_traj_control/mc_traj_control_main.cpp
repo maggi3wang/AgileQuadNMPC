@@ -226,7 +226,7 @@ private:
     
     /* Dynamical properties */
     float _mass;					/**< mass of quadrotor (kg) */
-    math::Matrix<3, 3> _inertia;	/**< inertia matrix, fixed to body (kg*m^2) */
+    math::Matrix<3, 3> _J_B;	/**< inertia matrix, fixed to body (kg*m^2) */
     
     // time vectors
     std::vector<float> _spline_delt_sec; // time step sizes for each segment
@@ -299,7 +299,7 @@ private:
 	/**
 	 * Cross product between two vectors
 	 */
-	 math::Vector<3>	cross_product(const math::Vector<3>& vec1, 
+	 math::Vector<3>	cross(const math::Vector<3>& vec1, 
 							const math::Vector<3>& vec2);
 
 	/**
@@ -431,7 +431,7 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     
     /** TODO: update with better estimate */
     _mass = 0.0f;
-    _inertia.identity();
+    _J_B.identity();
 
 	_params_handles.thr_min		= param_find("MPC_THR_MIN");
 	_params_handles.thr_max		= param_find("MPC_THR_MAX");
@@ -756,7 +756,7 @@ MulticopterTrajectoryControl::limit_pos_nom_offset()
 }
 
 math::Vector<3> 
-MulticopterTrajectoryControl::cross_product(const math::Vector<3>& vec1, 
+MulticopterTrajectoryControl::cross(const math::Vector<3>& vec1, 
 		const math::Vector<3>& vec2)
 {
 	/* cross product between two vectors*/
@@ -932,8 +932,29 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_t)
     float poly_term_t = cur_seg == 0 ? 0.0f : _spline_delt_sec.at(cur_seg-1);
     
     // access current body rotation
-    math::Matrix<3, 3> R_BW;	/** R_BW rotates vectors in body from to world */
-    R_BW.set(_att.R);
+    math::Matrix<3, 3> R_B2W;	/**< R_B2W rotates vectors in body from to world */
+    R_B2W.set(_att.R);
+    math::Vector<3> x_body;
+    math::Vector<3> y_body;
+    math::Vector<3> z_body;
+    for (int i = 0; i < 3; i++) {
+		x_body(i) = R_B2W(i,0);
+		y_body(i) = R_B2W(i,1);
+		z_body(i) = R_B2W(i,2);
+	}
+	
+	
+	// intermediate variables
+	float uT_nom = 0.0f;	/**< nominal first input: thrust */
+	float uT1_nom = 0.0f;	/**< 1st deriv of nominal thrust input */
+	float uT2_nom = 0.0f;	/**< 2nd deriv of nominal thrust input */
+	math::Vector<3> x_Snom;
+    x_Snom.zero();
+    math::Vector<3> h_Omega;
+    h_Omega.zero();
+    math::Vector<3> h_alpha;
+    h_alpha.zero();
+    math::Vector<3> ones(1.0f, 1.0f, 1.0f);
     
     if (cur_spline_t <= 0) {
         
@@ -957,6 +978,8 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_t)
         _snap_nom(0) = 0.0f;
         _snap_nom(1) = 0.0f;
         _snap_nom(2) = 0.0f;
+        
+        position_hold();
         
     } else if (cur_spline_t > 0 && cur_spline_t < spline_term_t) {
     
@@ -994,25 +1017,45 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_t)
 		}
 		
 		// nominal thrust input
-		_u1_nom = -dot_product(
+		uT_nom = -dot_product(z_body, _F_nom);
         
         // nominal body axis in world frame
         _z_nom = (-1)*_F_nom.normalized();	// (eqn 15)
-        math::Vector<3> x_Snom;
-        x_Snom.zero();
         x_Snom(0) = (float)cos((double)(_att_sp.yaw_body));
         x_Snom(1) = (float)sin((double)(_att_sp.yaw_body));
-        _y_nom = cross_product(_z_nom, x_Snom);
+        _y_nom = cross(_z_nom, x_Snom);
         if (_y_nom.length() < GIMBAL_LOCK_THRESHOLD) {
 			gimbal_lock_maneuver();	// deal with gimbal lock
 			return;
 		}
 		/** TODO perfom nearness check for rotation (Mellinger & Kumar, Section IV) */
 		_y_nom.normalize();
-		_x_nom = cross_product(_y_nom, _z_nom);      
+		_x_nom = cross(_y_nom, _z_nom);
+		R_N2W.set_col(0, _x_nom);
+		R_N2W.set_col(1, _y_nom);
+		R_N2W.set_col(2, _z_nom);      
         
-        // 
+        // nominal angular velocity
+        uT1_nom = -_mass*dot_product(_jerk_nom, _z_nom);
+        h_Omega = -(1.0f/uT_nom)*(uT1_nom*_z_nom + _mass*_jerk_nom);
+        _Om_nom(0) = -dot_product(h_Omega, _y_nom);
+        _Om_nom(1) = dot_product(h_Omega, _x_nom);
+        _Om_nom(2) = psi1_nom*_z_nom(2);
+        
+        // nominal angular acceleration
+        uT2_nom = -dot_product(_mass*_snap_nom + cross(
+			_Om_nom, cross(_Om_nom, _z_nom)), _z_nom);
+        h_alpha = =-(1.0f/uT_nom)*(_mass*_snap_nom + uT2_nom*_z_nom + 
+			2.0f*uT1_nom*cross(_Om_nom, _z_nom) + cross(
+			_Om_nom, cross(_Om_nom, _z_nom)));
+		al_nom(0) = -dot_product(h_alpha, _y_nom);
+		al_nom(1) = dot_product(h_alpha, _x_nom);
+		al_nom(2) = psi2_nom*_z_nom - psi1_nom*h_Omega)(2);
 		
+		// nominal moment input
+		_M_nom = _J_B*(R_W2B*R_N2W*al_nom - cross(_Om_body, R_W2B*R_N2W*_Om_nom)) +
+			cross(_Om_body, _J_B*_Om_body);
+        		
     } else {
         
         _pos_nom(0) = poly_eval(_x_coefs.at(_x_coefs.size()-1), poly_term_t);
@@ -1035,6 +1078,8 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_t)
         _snap_nom(0) = 0.0f;
         _snap_nom(1) = 0.0f;
         _snap_nom(2) = 0.0f;
+        
+        position_hold();
     }
     
 }
@@ -1215,9 +1260,9 @@ MulticopterTrajectoryControl::task_main()
     
     /** TODO: change later with m and J estimators */
     _mass = MASS_TEMP;
-    _inertia(1, 1) = XY_INERTIA_TEMP;
-    _inertia(2, 2) = XY_INERTIA_TEMP;
-    _inertia(3, 3) = Z_INERTIA_TEMP;
+    _J_B(1, 1) = XY_INERTIA_TEMP;
+    _J_B(2, 2) = XY_INERTIA_TEMP;
+    _J_B(3, 3) = Z_INERTIA_TEMP;
 
 	/* wakeup source */
 	struct pollfd fds[1];
