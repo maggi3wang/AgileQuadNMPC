@@ -312,10 +312,8 @@ private:
 	/**
      * Set position setpoint using trajectory control - Ross Allen
      */
-    void        control_periodic_trajectory(float t, float dt);
-    void        control_polynomial_trajectory(float t, float start_t, float dt);
-    void        control_spline_trajectory(float t, float start_t);
-    void        trajectory_hold();
+    void        trajectory_nominal_state(float t, float start_t);
+    void		trajectory_feedback_controller();
     void        reset_trajectory();
     
     /**
@@ -796,118 +794,6 @@ MulticopterTrajectoryControl::cross_sphere_line(const math::Vector<3>& sphere_c,
 	}
 }
 
-/* Added by Ross Allen */
-/** TO BE REMOVED */
-void
-MulticopterTrajectoryControl::control_periodic_trajectory(float t, float dt)
-{
-    //~ /* Just force a static setpoint for now */
-    //~ _pos_nom(0) = ASL_LAB_CENTER_X;
-	//~ _pos_nom(1) = ASL_LAB_CENTER_Y;
-	//~ _pos_nom(2) = ASL_LAB_CENTER_Z;
-    //~ _att_sp.yaw_body = ASL_LAB_CENTER_YAW;
-    
-    float pi_f = (float)M_PI;
-    
-    /* Simple circular trajectory */
-    //~ _pos_nom(0) = 0.5f*(float)cos((double)(2.0f*t/5.0f)*M_PI) + ASL_LAB_CENTER_X;
-    //~ _pos_nom(1) = 0.5f*(float)sin((double)(2.0f*t/5.0f)*M_PI) + ASL_LAB_CENTER_Y;
-    //~ _pos_nom(2) = 0.5f*(float)cos((double)(2.0f*t/20.0f)*M_PI) + ASL_LAB_CENTER_Z;
-    //~ _att_sp.yaw_body = ASL_LAB_CENTER_YAW;
-    //~ 
-    //~ _vel_nom(0) = 0.5f*(2.0f/5.0f)*((float)M_PI)*(-(float)sin((double)(2.0f*t/5.0f)*M_PI));
-    //~ _vel_nom(1) = 0.5f*(2.0f/5.0f)*((float)M_PI)*((float)cos((double)(2.0f*t/5.0f)*M_PI));
-    //~ _vel_nom(2) = 0.5f*(2.0f/20.0f)*((float)M_PI)*(-(float)sin((double)(2.0f*t/20.0f)*M_PI));
-    //~ _vel_nom = _vel_nom.emult(_params.vel_ff);
-    float omega_xy = 2.0f*pi_f/5.0f;
-    float omega_z = 2.0f*pi_f/20.0f;
-    float amp_xy = 0.5f;
-    float amp_z = 0.5f;
-    _pos_nom(0) = amp_xy*(float)cos(omega_xy*t) + ASL_LAB_CENTER_X;
-    _pos_nom(1) = amp_xy*(float)sin(omega_xy*t) + ASL_LAB_CENTER_Y;
-    _pos_nom(2) = amp_xy*(float)cos(omega_z*t) + ASL_LAB_CENTER_Z;
-    _att_sp.yaw_body = ASL_LAB_CENTER_YAW;
-    
-    _vel_nom(0) = amp_xy*omega_xy*(-(float)sin(omega_xy*t));
-    _vel_nom(1) = amp_xy*omega_xy*((float)cos(omega_xy*t));
-    _vel_nom(2) = amp_z*omega_z*(-(float)sin(omega_z*t));
-    //~ _vel_nom = _vel_nom.emult(_params.vel_ff);
-    
-    _acc_nom(0) = amp_xy*omega_xy*omega_xy*(-(float)cos(omega_xy*t));
-    _acc_nom(1) = amp_xy*omega_xy*omega_xy*(-(float)sin(omega_xy*t));
-    _acc_nom(2) = amp_z*omega_z*omega_z*(-(float)cos(omega_z*t));
-}
-
-/* Added by Ross Allen */
-/** TO BE REMOVED */
-void
-MulticopterTrajectoryControl::control_spline_trajectory(float t, float start_t)
-{
-    
-    /* TODO: verify this works for single polynomial segment spline */
-    
-    // determine time in spline trajectory
-    float cur_spline_t = t - start_t;
-    float spline_term_t = _spline_cumt_sec.at(_spline_cumt_sec.size()-1);
-    
-    // determine polynomial segment being evaluated
-    std::vector<float>::iterator seg_it;
-    seg_it = std::lower_bound(_spline_cumt_sec.begin(), 
-        _spline_cumt_sec.end(), cur_spline_t);
-    int cur_seg = (int)(seg_it - _spline_cumt_sec.begin());
-    
-    // determine time in polynomial segment
-    float cur_poly_t = cur_seg == 0 ? cur_spline_t :
-                cur_spline_t - _spline_cumt_sec.at(cur_seg-1);
-    float poly_term_t = cur_seg == 0 ? 0.0f : _spline_delt_sec.at(cur_seg-1);
-    
-    if (cur_spline_t <= 0) {
-        
-        _pos_nom(0) = poly_eval(_x_coefs.at(0), 0.0f);
-        _pos_nom(1) = poly_eval(_y_coefs.at(0), 0.0f);
-        _pos_nom(2) = poly_eval(_z_coefs.at(0), 0.0f);
-        _att_sp.yaw_body = poly_eval(_yaw_coefs.at(0), 0.0f);
-        
-        _vel_nom(0) = 0.0f;
-        _vel_nom(1) = 0.0f;
-        _vel_nom(2) = 0.0f;
-        
-        _acc_nom(0) = 0.0f;
-        _acc_nom(1) = 0.0f;
-        _acc_nom(2) = 0.0f;
-        
-    } else if (cur_spline_t > 0 && cur_spline_t < spline_term_t) {
-    
-        _pos_nom(0) = poly_eval(_x_coefs.at(cur_seg), cur_poly_t);
-        _pos_nom(1) = poly_eval(_y_coefs.at(cur_seg), cur_poly_t);
-        _pos_nom(2) = poly_eval(_z_coefs.at(cur_seg), cur_poly_t);
-        _att_sp.yaw_body = poly_eval(_yaw_coefs.at(cur_seg), cur_poly_t);
-        
-        _vel_nom(0) = poly_eval(_xv_coefs.at(cur_seg), cur_poly_t);
-        _vel_nom(1) = poly_eval(_yv_coefs.at(cur_seg), cur_poly_t);
-        _vel_nom(2) = poly_eval(_zv_coefs.at(cur_seg), cur_poly_t);
-        
-        _acc_nom(0) = poly_eval(_xa_coefs.at(cur_seg), cur_poly_t);
-        _acc_nom(1) = poly_eval(_ya_coefs.at(cur_seg), cur_poly_t);
-        _acc_nom(2) = poly_eval(_za_coefs.at(cur_seg), cur_poly_t);
-    
-    } else {
-        
-        _pos_nom(0) = poly_eval(_x_coefs.at(_x_coefs.size()-1), poly_term_t);
-        _pos_nom(1) = poly_eval(_y_coefs.at(_y_coefs.size()-1), poly_term_t);
-        _pos_nom(2) = poly_eval(_z_coefs.at(_z_coefs.size()-1), poly_term_t);
-        _att_sp.yaw_body = poly_eval(_yaw_coefs.at(_yaw_coefs.size()-1), poly_term_t);
-        
-        _vel_nom(0) = 0.0f;
-        _vel_nom(1) = 0.0f;
-        _vel_nom(2) = 0.0f;
-        
-        _acc_nom(0) = 0.0f;
-        _acc_nom(1) = 0.0f;
-        _acc_nom(2) = 0.0f;
-    }
-    
-}
 
 /* Calculate the nominal state variables for the trajectory at the current time */
 void
@@ -1017,7 +903,7 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_t)
 		}
 		
 		// nominal thrust input
-		uT_nom = -dot_product(z_body, _F_nom);
+		uT_nom = -dot(z_body, _F_nom);
         
         // nominal body axis in world frame
         _z_nom = (-1)*_F_nom.normalized();	// (eqn 15)
@@ -1036,20 +922,20 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_t)
 		R_N2W.set_col(2, _z_nom);      
         
         // nominal angular velocity
-        uT1_nom = -_mass*dot_product(_jerk_nom, _z_nom);
+        uT1_nom = -_mass*dot(_jerk_nom, _z_nom);
         h_Omega = -(1.0f/uT_nom)*(uT1_nom*_z_nom + _mass*_jerk_nom);
-        _Om_nom(0) = -dot_product(h_Omega, _y_nom);
-        _Om_nom(1) = dot_product(h_Omega, _x_nom);
+        _Om_nom(0) = -dot(h_Omega, _y_nom);
+        _Om_nom(1) = dot(h_Omega, _x_nom);
         _Om_nom(2) = psi1_nom*_z_nom(2);
         
         // nominal angular acceleration
-        uT2_nom = -dot_product(_mass*_snap_nom + cross(
+        uT2_nom = -dot(_mass*_snap_nom + cross(
 			_Om_nom, cross(_Om_nom, _z_nom)), _z_nom);
         h_alpha = =-(1.0f/uT_nom)*(_mass*_snap_nom + uT2_nom*_z_nom + 
 			2.0f*uT1_nom*cross(_Om_nom, _z_nom) + cross(
 			_Om_nom, cross(_Om_nom, _z_nom)));
-		al_nom(0) = -dot_product(h_alpha, _y_nom);
-		al_nom(1) = dot_product(h_alpha, _x_nom);
+		al_nom(0) = -dot(h_alpha, _y_nom);
+		al_nom(1) = dot(h_alpha, _x_nom);
 		al_nom(2) = psi2_nom*_z_nom - psi1_nom*h_Omega)(2);
 		
 		// nominal moment input
@@ -1084,7 +970,30 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_t)
     
 }
 
-/* Added by Ross Allen */
+/* Apply feedback control to nominal trajectory */
+void
+MulticopterTrajectoryControl::trajectory_feedback_controller()
+{
+	/* error terms */
+	math::Vector<3> pos_err;
+	pos_err.zero();
+	math::Vector<3> vel_err;
+	vel_err.zero();
+	math::Vector<3> ang_err;
+	ang_err.zero;
+	math::Vector<3> omg_err;
+	
+	/* translational corrective input */
+	math::Vector<3> F_cor;
+	F_cor.zero();
+	F_cor = pos_err.emult(k_pos) + vel_err.emult(k_vel);
+	
+	
+	/* rotational corrective input */
+	
+}
+
+/* hold position */
 void
 MulticopterTrajectoryControl::trajectory_hold()
 {
@@ -1397,12 +1306,14 @@ MulticopterTrajectoryControl::task_main()
 					poly_deriv(_zj_coefs, _zs_coefs);
 				}
 				
-				/* call trajectory controller */
+				/**
+				 * Calculate nominal states and inputs
+				 */
 				trajectory_nominal_state(t_sec, spline_start_t_sec);
 			
 			} else {
 				// perform position hold
-				trajectory_hold();
+				position_hold();
 				
 			}
                   
@@ -1421,11 +1332,12 @@ MulticopterTrajectoryControl::task_main()
 			} else {
 				_local_pos_nom_pub = orb_advertise(ORB_ID(vehicle_local_position_setpoint), &_local_pos_nom);
 			}
-
-
+			
 			/**
-			 * Start of primary control calculations
+			 * Apply feedback control to nominal trajectory
 			 */
+			 trajectory_feeback_controller();
+
 
 			/* publish actuator controls */
 			_actuators.control[0] = (isfinite(_att_control(0))) ? _att_control(0) : 0.0f;
