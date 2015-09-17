@@ -91,6 +91,12 @@
 #define SPLINE_START_DELAY 500000
 #define N_POLY_COEFS    10
 
+#define GRAV 	9.81f
+
+// TODO remove these later when I have an estimator for m and inertia
+#define MASS_TEMP 2.0f
+#define XY_INERTIA_TEMP 0.007f
+#define Z_INERTIA_TEMP 0.014f
 
 /**
  * Multicopter position control app start / stop handling function
@@ -122,7 +128,7 @@ public:
 private:
 	const float alt_ctl_dz = 0.2f;
 
-	bool		_task_should_exit;		/**< if true, task should exit */
+	bool	_task_should_exit;		/**< if true, task should exit */
 	int		_control_task;			/**< task handle for task */
 	int		_mavlink_fd;			/**< mavlink fd */
 
@@ -140,7 +146,7 @@ private:
 	orb_advert_t	_att_sp_pub;			/**< attitude setpoint publication */
 	orb_advert_t	_local_pos_nom_pub;		/**< vehicle local position setpoint publication */
 	orb_advert_t	_global_vel_sp_pub;		/**< vehicle global velocity setpoint publication */
-    orb_advert_t    _vel_ff_uorb_pub;       /**< vehicle velocity feed forward publication */
+    orb_advert_t    _vel_nom_uorb_pub;       /**< vehicle velocity feed forward publication */
     orb_advert_t	_actuators_0_pub;		/**< attitude actuator controls publication */
 
 	struct vehicle_attitude_s			_att;			/**< vehicle attitude */
@@ -151,7 +157,7 @@ private:
 	struct vehicle_local_position_s			_local_pos;		/**< vehicle local position */
 	struct vehicle_local_position_setpoint_s	_local_pos_nom;		/**< vehicle local position setpoint */
 	struct vehicle_global_velocity_setpoint_s	_global_vel_sp;	/**< vehicle global velocity setpoint */
-    struct vehicle_velocity_feed_forward_s      _vel_ff_uorb;   /**< vehicle velocity feed forward term */
+    struct vehicle_velocity_feed_forward_s      _vel_nom_uorb;   /**< vehicle velocity feed forward term */
     struct trajectory_spline_s  _traj_spline;   /**< trajectory spline */
     struct actuator_controls_s			_actuators;			/**< actuator controls */
 
@@ -200,35 +206,58 @@ private:
     bool _control_trajectory_started;
     
 	math::Vector<3> _pos;
-	math::Vector<3> _pos_nom;
+	math::Vector<3> _pos_nom;		/**< nominal position */
 	math::Vector<3> _vel;
 	math::Vector<3> _vel_sp;
-	math::Vector<3> _vel_prev;			/**< velocity on previous step */
-	math::Vector<3> _vel_ff;
+	math::Vector<3> _vel_prev;		/**< velocity on previous step */
+	math::Vector<3> _vel_nom;		/**< nominal velocity */
 	math::Vector<3> _sp_move_rate;
-    math::Vector<3> _acc_ff;            /**< acceleration of setpoint not including corrective terms - Ross Allen */
+    math::Vector<3> _acc_nom;       /**< nominal acceleration */
+    math::Vector<3> _jerk_nom;      /**< nominal jerk (3rd derivative) */
+    math::Vector<3> _snap_nom;   	/**< nominal snap (4rd derivative) */
+    math::Vector<3> _x_nom;			/**< nominal x-axis of quadrotor expressed in world coords */
+    math::Vector<3> _y_nom;			/**< nominal x-axis of quadrotor expressed in world coords */
+    math::Vector<3> _z_nom;			/**< nominal x-axis of quadrotor expressed in world coords */
+    math::Vector<3> _F_nom;			/**< nominal force expressed in world coords */
     math::Vector<3>	_att_control;	/**< attitude control vector */
     float			_thrust_sp;		/**< thrust setpoint */
     
     int _n_spline_seg;      /** < number of segments in spline (not max number, necassarily) */
     
+    /* Dynamical properties */
+    float _mass;					/**< mass of quadrotor (kg) */
+    math::Matrix<3, 3> _inertia;	/**< inertia matrix, fixed to body (kg*m^2) */
+    
     // time vectors
     std::vector<float> _spline_delt_sec; // time step sizes for each segment
     std::vector<float> _spline_cumt_sec; // cumulative time markers for each segment
 
-    // initialize vector of appropriate size
+    /* define vector of appropriate size for trajectory spline polynomials */
+    // position 
     std::vector< std::vector<float> > _x_coefs;
     std::vector< std::vector<float> > _y_coefs;
     std::vector< std::vector<float> > _z_coefs;
     std::vector< std::vector<float> > _yaw_coefs;
     
+    // velocity
     std::vector< std::vector<float> > _xv_coefs;
     std::vector< std::vector<float> > _yv_coefs;
     std::vector< std::vector<float> > _zv_coefs;
     
+    // acceleration
     std::vector< std::vector<float> > _xa_coefs;
     std::vector< std::vector<float> > _ya_coefs;
     std::vector< std::vector<float> > _za_coefs;
+    
+    // jerk
+    std::vector< std::vector<float> > _xj_coefs;
+    std::vector< std::vector<float> > _yj_coefs;
+    std::vector< std::vector<float> > _zj_coefs;
+    
+    // snap
+    std::vector< std::vector<float> > _xs_coefs;
+    std::vector< std::vector<float> > _ys_coefs;
+    std::vector< std::vector<float> > _zs_coefs;
     
 
 	/**
@@ -347,7 +376,7 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 	_att_sp_pub(-1),
 	_local_pos_nom_pub(-1),
 	_global_vel_sp_pub(-1),
-    _vel_ff_uorb_pub(-1),
+    _vel_nom_uorb_pub(-1),
     _actuators_0_pub(-1),
 
 	_ref_alt(0.0f),
@@ -364,7 +393,7 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 	memset(&_local_pos, 0, sizeof(_local_pos));
 	memset(&_local_pos_nom, 0, sizeof(_local_pos_nom));
 	memset(&_global_vel_sp, 0, sizeof(_global_vel_sp));
-    memset(&_vel_ff_uorb, 0, sizeof(_vel_ff_uorb));
+    memset(&_vel_nom_uorb, 0, sizeof(_vel_nom_uorb));
     memset(&_traj_spline, 0, sizeof(_traj_spline));
     memset(&_actuators, 0, sizeof(_actuators));
 
@@ -383,12 +412,21 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 	_vel.zero();
 	_vel_sp.zero();
 	_vel_prev.zero();
-    //~ _vel_err_prev.zero();
-	_vel_ff.zero();
+	_vel_nom.zero();
 	_sp_move_rate.zero();
-    _acc_ff.zero();
+    _acc_nom.zero();
+    _jerk_nom.zero();
+    _snap_nom.zero();
+    _x_nom.zero();
+    _y_nom.zero();
+    _z_nom.zero();
+    _F_nom.zero();
     _att_control.zero();
     _thrust_sp = 0.0f;
+    
+    /** TODO: update with better estimate */
+    _mass = 0.0f;
+    _inertia.identity();
 
 	_params_handles.thr_min		= param_find("MPC_THR_MIN");
 	_params_handles.thr_max		= param_find("MPC_THR_MAX");
@@ -758,10 +796,10 @@ MulticopterTrajectoryControl::control_periodic_trajectory(float t, float dt)
     //~ _pos_nom(2) = 0.5f*(float)cos((double)(2.0f*t/20.0f)*M_PI) + ASL_LAB_CENTER_Z;
     //~ _att_sp.yaw_body = ASL_LAB_CENTER_YAW;
     //~ 
-    //~ _vel_ff(0) = 0.5f*(2.0f/5.0f)*((float)M_PI)*(-(float)sin((double)(2.0f*t/5.0f)*M_PI));
-    //~ _vel_ff(1) = 0.5f*(2.0f/5.0f)*((float)M_PI)*((float)cos((double)(2.0f*t/5.0f)*M_PI));
-    //~ _vel_ff(2) = 0.5f*(2.0f/20.0f)*((float)M_PI)*(-(float)sin((double)(2.0f*t/20.0f)*M_PI));
-    //~ _vel_ff = _vel_ff.emult(_params.vel_ff);
+    //~ _vel_nom(0) = 0.5f*(2.0f/5.0f)*((float)M_PI)*(-(float)sin((double)(2.0f*t/5.0f)*M_PI));
+    //~ _vel_nom(1) = 0.5f*(2.0f/5.0f)*((float)M_PI)*((float)cos((double)(2.0f*t/5.0f)*M_PI));
+    //~ _vel_nom(2) = 0.5f*(2.0f/20.0f)*((float)M_PI)*(-(float)sin((double)(2.0f*t/20.0f)*M_PI));
+    //~ _vel_nom = _vel_nom.emult(_params.vel_ff);
     float omega_xy = 2.0f*pi_f/5.0f;
     float omega_z = 2.0f*pi_f/20.0f;
     float amp_xy = 0.5f;
@@ -771,14 +809,14 @@ MulticopterTrajectoryControl::control_periodic_trajectory(float t, float dt)
     _pos_nom(2) = amp_xy*(float)cos(omega_z*t) + ASL_LAB_CENTER_Z;
     _att_sp.yaw_body = ASL_LAB_CENTER_YAW;
     
-    _vel_ff(0) = amp_xy*omega_xy*(-(float)sin(omega_xy*t));
-    _vel_ff(1) = amp_xy*omega_xy*((float)cos(omega_xy*t));
-    _vel_ff(2) = amp_z*omega_z*(-(float)sin(omega_z*t));
-    //~ _vel_ff = _vel_ff.emult(_params.vel_ff);
+    _vel_nom(0) = amp_xy*omega_xy*(-(float)sin(omega_xy*t));
+    _vel_nom(1) = amp_xy*omega_xy*((float)cos(omega_xy*t));
+    _vel_nom(2) = amp_z*omega_z*(-(float)sin(omega_z*t));
+    //~ _vel_nom = _vel_nom.emult(_params.vel_ff);
     
-    _acc_ff(0) = amp_xy*omega_xy*omega_xy*(-(float)cos(omega_xy*t));
-    _acc_ff(1) = amp_xy*omega_xy*omega_xy*(-(float)sin(omega_xy*t));
-    _acc_ff(2) = amp_z*omega_z*omega_z*(-(float)cos(omega_z*t));
+    _acc_nom(0) = amp_xy*omega_xy*omega_xy*(-(float)cos(omega_xy*t));
+    _acc_nom(1) = amp_xy*omega_xy*omega_xy*(-(float)sin(omega_xy*t));
+    _acc_nom(2) = amp_z*omega_z*omega_z*(-(float)cos(omega_z*t));
 }
 
 /* Added by Ross Allen */
@@ -811,13 +849,13 @@ MulticopterTrajectoryControl::control_spline_trajectory(float t, float start_t)
         _pos_nom(2) = poly_eval(_z_coefs.at(0), 0.0f);
         _att_sp.yaw_body = poly_eval(_yaw_coefs.at(0), 0.0f);
         
-        _vel_ff(0) = 0.0f;
-        _vel_ff(1) = 0.0f;
-        _vel_ff(2) = 0.0f;
+        _vel_nom(0) = 0.0f;
+        _vel_nom(1) = 0.0f;
+        _vel_nom(2) = 0.0f;
         
-        _acc_ff(0) = 0.0f;
-        _acc_ff(1) = 0.0f;
-        _acc_ff(2) = 0.0f;
+        _acc_nom(0) = 0.0f;
+        _acc_nom(1) = 0.0f;
+        _acc_nom(2) = 0.0f;
         
     } else if (cur_spline_t > 0 && cur_spline_t < spline_term_t) {
     
@@ -826,13 +864,13 @@ MulticopterTrajectoryControl::control_spline_trajectory(float t, float start_t)
         _pos_nom(2) = poly_eval(_z_coefs.at(cur_seg), cur_poly_t);
         _att_sp.yaw_body = poly_eval(_yaw_coefs.at(cur_seg), cur_poly_t);
         
-        _vel_ff(0) = poly_eval(_xv_coefs.at(cur_seg), cur_poly_t);
-        _vel_ff(1) = poly_eval(_yv_coefs.at(cur_seg), cur_poly_t);
-        _vel_ff(2) = poly_eval(_zv_coefs.at(cur_seg), cur_poly_t);
+        _vel_nom(0) = poly_eval(_xv_coefs.at(cur_seg), cur_poly_t);
+        _vel_nom(1) = poly_eval(_yv_coefs.at(cur_seg), cur_poly_t);
+        _vel_nom(2) = poly_eval(_zv_coefs.at(cur_seg), cur_poly_t);
         
-        _acc_ff(0) = poly_eval(_xa_coefs.at(cur_seg), cur_poly_t);
-        _acc_ff(1) = poly_eval(_ya_coefs.at(cur_seg), cur_poly_t);
-        _acc_ff(2) = poly_eval(_za_coefs.at(cur_seg), cur_poly_t);
+        _acc_nom(0) = poly_eval(_xa_coefs.at(cur_seg), cur_poly_t);
+        _acc_nom(1) = poly_eval(_ya_coefs.at(cur_seg), cur_poly_t);
+        _acc_nom(2) = poly_eval(_za_coefs.at(cur_seg), cur_poly_t);
     
     } else {
         
@@ -841,13 +879,13 @@ MulticopterTrajectoryControl::control_spline_trajectory(float t, float start_t)
         _pos_nom(2) = poly_eval(_z_coefs.at(_z_coefs.size()-1), poly_term_t);
         _att_sp.yaw_body = poly_eval(_yaw_coefs.at(_yaw_coefs.size()-1), poly_term_t);
         
-        _vel_ff(0) = 0.0f;
-        _vel_ff(1) = 0.0f;
-        _vel_ff(2) = 0.0f;
+        _vel_nom(0) = 0.0f;
+        _vel_nom(1) = 0.0f;
+        _vel_nom(2) = 0.0f;
         
-        _acc_ff(0) = 0.0f;
-        _acc_ff(1) = 0.0f;
-        _acc_ff(2) = 0.0f;
+        _acc_nom(0) = 0.0f;
+        _acc_nom(1) = 0.0f;
+        _acc_nom(2) = 0.0f;
     }
     
 }
@@ -881,29 +919,59 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_t)
         _pos_nom(2) = poly_eval(_z_coefs.at(0), 0.0f);
         _att_sp.yaw_body = poly_eval(_yaw_coefs.at(0), 0.0f);
         
-        _vel_ff(0) = 0.0f;
-        _vel_ff(1) = 0.0f;
-        _vel_ff(2) = 0.0f;
+        _vel_nom(0) = 0.0f;
+        _vel_nom(1) = 0.0f;
+        _vel_nom(2) = 0.0f;
         
-        _acc_ff(0) = 0.0f;
-        _acc_ff(1) = 0.0f;
-        _acc_ff(2) = 0.0f;
+        _acc_nom(0) = 0.0f;
+        _acc_nom(1) = 0.0f;
+        _acc_nom(2) = 0.0f;
+        
+        _jerk_nom(0) = 0.0f;
+        _jerk_nom(1) = 0.0f;
+        _jerk_nom(2) = 0.0f;
+        
+        _snap_nom(0) = 0.0f;
+        _snap_nom(1) = 0.0f;
+        _snap_nom(2) = 0.0f;
         
     } else if (cur_spline_t > 0 && cur_spline_t < spline_term_t) {
     
+		// nominal position
         _pos_nom(0) = poly_eval(_x_coefs.at(cur_seg), cur_poly_t);
         _pos_nom(1) = poly_eval(_y_coefs.at(cur_seg), cur_poly_t);
         _pos_nom(2) = poly_eval(_z_coefs.at(cur_seg), cur_poly_t);
         _att_sp.yaw_body = poly_eval(_yaw_coefs.at(cur_seg), cur_poly_t);
         
-        _vel_ff(0) = poly_eval(_xv_coefs.at(cur_seg), cur_poly_t);
-        _vel_ff(1) = poly_eval(_yv_coefs.at(cur_seg), cur_poly_t);
-        _vel_ff(2) = poly_eval(_zv_coefs.at(cur_seg), cur_poly_t);
+        // nominal velocity
+        _vel_nom(0) = poly_eval(_xv_coefs.at(cur_seg), cur_poly_t);
+        _vel_nom(1) = poly_eval(_yv_coefs.at(cur_seg), cur_poly_t);
+        _vel_nom(2) = poly_eval(_zv_coefs.at(cur_seg), cur_poly_t);
         
-        _acc_ff(0) = poly_eval(_xa_coefs.at(cur_seg), cur_poly_t);
-        _acc_ff(1) = poly_eval(_ya_coefs.at(cur_seg), cur_poly_t);
-        _acc_ff(2) = poly_eval(_za_coefs.at(cur_seg), cur_poly_t);
+        // nominal acceleration
+        _acc_nom(0) = poly_eval(_xa_coefs.at(cur_seg), cur_poly_t);
+        _acc_nom(1) = poly_eval(_ya_coefs.at(cur_seg), cur_poly_t);
+        _acc_nom(2) = poly_eval(_za_coefs.at(cur_seg), cur_poly_t);
     
+		// nominal jerk
+		_jerk_nom(0) = poly_eval(_xj_coefs.at(cur_seg), cur_poly_t);
+        _jerk_nom(1) = poly_eval(_yj_coefs.at(cur_seg), cur_poly_t);
+        _jerk_nom(2) = poly_eval(_zj_coefs.at(cur_seg), cur_poly_t);
+        
+        // nominal snap
+		_snap_nom(0) = poly_eval(_xs_coefs.at(cur_seg), cur_poly_t);
+        _snap_nom(1) = poly_eval(_ys_coefs.at(cur_seg), cur_poly_t);
+        _snap_nom(2) = poly_eval(_zs_coefs.at(cur_seg), cur_poly_t);
+        
+        // nominal force in world frame (eqn 16)
+        _F_nom = _jerk_nom*mass - z_W*(mass*grav);
+        
+        // nominal body axis in world frame
+        _z_nom = (-1)*_F_nom.normalized();	// (eqn 15)
+        
+        
+        // 
+		
     } else {
         
         _pos_nom(0) = poly_eval(_x_coefs.at(_x_coefs.size()-1), poly_term_t);
@@ -911,13 +979,21 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_t)
         _pos_nom(2) = poly_eval(_z_coefs.at(_z_coefs.size()-1), poly_term_t);
         _att_sp.yaw_body = poly_eval(_yaw_coefs.at(_yaw_coefs.size()-1), poly_term_t);
         
-        _vel_ff(0) = 0.0f;
-        _vel_ff(1) = 0.0f;
-        _vel_ff(2) = 0.0f;
+        _vel_nom(0) = 0.0f;
+        _vel_nom(1) = 0.0f;
+        _vel_nom(2) = 0.0f;
         
-        _acc_ff(0) = 0.0f;
-        _acc_ff(1) = 0.0f;
-        _acc_ff(2) = 0.0f;
+        _acc_nom(0) = 0.0f;
+        _acc_nom(1) = 0.0f;
+        _acc_nom(2) = 0.0f;
+        
+        _jerk_nom(0) = 0.0f;
+        _jerk_nom(1) = 0.0f;
+        _jerk_nom(2) = 0.0f;
+        
+        _snap_nom(0) = 0.0f;
+        _snap_nom(1) = 0.0f;
+        _snap_nom(2) = 0.0f;
     }
     
 }
@@ -930,13 +1006,13 @@ MulticopterTrajectoryControl::trajectory_hold()
     reset_alt_sp();
     reset_pos_nom();
     
-    _vel_ff(0) = 0.0f;
-    _vel_ff(1) = 0.0f;
-    _vel_ff(2) = 0.0f;
+    _vel_nom(0) = 0.0f;
+    _vel_nom(1) = 0.0f;
+    _vel_nom(2) = 0.0f;
     
-    _acc_ff(0) = 0.0f;
-    _acc_ff(1) = 0.0f;
-    _acc_ff(2) = 0.0f;
+    _acc_nom(0) = 0.0f;
+    _acc_nom(1) = 0.0f;
+    _acc_nom(2) = 0.0f;
         
 }
 
@@ -1067,7 +1143,7 @@ MulticopterTrajectoryControl::task_main()
 	_local_pos_sub = orb_subscribe(ORB_ID(vehicle_local_position));
 	_local_pos_nom_sub = orb_subscribe(ORB_ID(vehicle_local_position_setpoint));
 	_global_vel_sp_sub = orb_subscribe(ORB_ID(vehicle_global_velocity_setpoint));
-    	_traj_spline_sub = orb_subscribe(ORB_ID(trajectory_spline));
+    _traj_spline_sub = orb_subscribe(ORB_ID(trajectory_spline));
 
 
 	parameters_update(true);
@@ -1089,14 +1165,18 @@ MulticopterTrajectoryControl::task_main()
 	R.identity();
     
     /**************** OVERWRITE LATER*****************************/
-    /* initialize spline information */
-    
+    /* initialize spline information */  
     typedef std::vector<float>::size_type vecf_sz;
     typedef std::vector< std::vector<float> >::size_type vecf2d_sz;
     
     // time vector
     float spline_start_t_sec;
-
+    
+    /** TODO: change later with m and J estimators */
+    _mass = MASS_TEMP;
+    _inertia(1, 1) = XY_INERTIA_TEMP;
+    _inertia(2, 2) = XY_INERTIA_TEMP;
+    _inertia(3, 3) = Z_INERTIA_TEMP;
 
 	/* wakeup source */
 	struct pollfd fds[1];
@@ -1165,9 +1245,9 @@ MulticopterTrajectoryControl::task_main()
 			_vel(1) = _local_pos.vy;
 			_vel(2) = _local_pos.vz;
 
-			_vel_ff.zero();
+			_vel_nom.zero();
 			_sp_move_rate.zero();
-            _acc_ff.zero();
+            _acc_nom.zero();
                 
                 
 			// Check that trajectory data is available
@@ -1219,14 +1299,20 @@ MulticopterTrajectoryControl::task_main()
 					// Calculate derivative coefficients
 					poly_deriv(_x_coefs, _xv_coefs);
 					poly_deriv(_xv_coefs, _xa_coefs);
+					poly_deriv(_xa_coefs, _xj_coefs);
+					poly_deriv(_xj_coefs, _xs_coefs);
 					poly_deriv(_y_coefs, _yv_coefs);
 					poly_deriv(_yv_coefs, _ya_coefs);
+					poly_deriv(_ya_coefs, _yj_coefs);
+					poly_deriv(_yj_coefs, _ys_coefs);
 					poly_deriv(_z_coefs, _zv_coefs);
 					poly_deriv(_zv_coefs, _za_coefs);
+					poly_deriv(_za_coefs, _zj_coefs);
+					poly_deriv(_zj_coefs, _zs_coefs);
 				}
 				
 				/* call trajectory controller */
-				control_spline_trajectory(t_sec, spline_start_t_sec);
+				trajectory_nominal_state(t_sec, spline_start_t_sec);
 			
 			} else {
 				// perform position hold
