@@ -215,9 +215,9 @@ private:
     math::Vector<3> _acc_nom;       /**< nominal acceleration */
     math::Vector<3> _jerk_nom;      /**< nominal jerk (3rd derivative) */
     math::Vector<3> _snap_nom;   	/**< nominal snap (4rd derivative) */
-    math::Vector<3> _x_nom;			/**< nominal x-axis of quadrotor expressed in world coords */
-    math::Vector<3> _y_nom;			/**< nominal x-axis of quadrotor expressed in world coords */
-    math::Vector<3> _z_nom;			/**< nominal x-axis of quadrotor expressed in world coords */
+    //~ math::Vector<3> _x_nom;			/**< nominal x-axis of quadrotor expressed in world coords */
+    //~ math::Vector<3> _y_nom;			/**< nominal x-axis of quadrotor expressed in world coords */
+    //~ math::Vector<3> _z_nom;			/**< nominal x-axis of quadrotor expressed in world coords */
     math::Vector<3> _F_nom;			/**< nominal force expressed in world coords */
     math::Vector<3>	_att_control;	/**< attitude control vector */
     float			_thrust_sp;		/**< thrust setpoint */
@@ -420,9 +420,9 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     _acc_nom.zero();
     _jerk_nom.zero();
     _snap_nom.zero();
-    _x_nom.zero();
-    _y_nom.zero();
-    _z_nom.zero();
+    //~ _x_nom.zero();
+    //~ _y_nom.zero();
+    //~ _z_nom.zero();
     _F_nom.zero();
     _att_control.zero();
     _thrust_sp = 0.0f;
@@ -794,6 +794,45 @@ MulticopterTrajectoryControl::cross_sphere_line(const math::Vector<3>& sphere_c,
 	}
 }
 
+/* Calculate thrust input, orientation matrix and angular velocity based on a force vector */
+void
+MulticopterTrajectoryControl::force_orientation_mapping(
+		math::Matrix<3,3>& R_S2W, math::Vector<3>& x_s, math::Vector<3>& y_s, math::Vector<3>& z_s,
+		float& uT_s, float& uT1_s, math::Vector<3>& Om_s, math::Vector<3>& h_omega,
+		const math::Vector<3>& F_s)
+{
+	
+		// intermediate vector
+		math::Vector<3> x_mid;
+		x_mid.zero();
+		
+		// nominal thrust input
+		uT_s = -dot(_z_body, _F_s);
+		
+	    // nominal body axis in world frame
+        z_s = (-1)*_F_s.normalized();	// (eqn 15)
+        x_mid(0) = (float)cos((double)(_psi_nom));
+        x_mid(1) = (float)sin((double)(_psi_nom));
+        y_nom = cross(z_nom, x_mid);
+        if (y_s.length() < GIMBAL_LOCK_THRESHOLD) {
+			gimbal_lock_maneuver();	// deal with gimbal lock
+			return;
+		}
+		/** TODO perfom nearness check for rotation (Mellinger & Kumar, Section IV) */
+		y_s.normalize();
+		x_s = cross(y_s, z_s);
+		R_S2W.set_col(0, x_s);
+		R_S2W.set_col(1, y_s);
+		R_S2W.set_col(2, z_s);      
+        
+        // nominal angular velocity
+        uT1_s = -_mass*dot(_jerk_nom, z_s);
+        h_Omega = -(1.0f/uT_s)*(uT1_s*z_s + _mass*_jerk_nom);
+        Om_s(0) = -dot(h_Omega, y_s);
+        Om_s(1) = dot(h_Omega, x_s);
+        Om_s(2) = _psi1_nom*z_s(2);
+	
+}
 
 /* Calculate the nominal state variables for the trajectory at the current time */
 void
@@ -834,8 +873,6 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_t)
 	float uT_nom = 0.0f;	/**< nominal first input: thrust */
 	float uT1_nom = 0.0f;	/**< 1st deriv of nominal thrust input */
 	float uT2_nom = 0.0f;	/**< 2nd deriv of nominal thrust input */
-	math::Vector<3> x_Snom;
-    x_Snom.zero();
     math::Vector<3> h_Omega;
     h_Omega.zero();
     math::Vector<3> h_alpha;
@@ -902,41 +939,26 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_t)
 			return;
 		}
 		
-		// nominal thrust input
-		uT_nom = -dot(z_body, _F_nom);
-        
-        // nominal body axis in world frame
-        _z_nom = (-1)*_F_nom.normalized();	// (eqn 15)
-        x_Snom(0) = (float)cos((double)(_att_sp.yaw_body));
-        x_Snom(1) = (float)sin((double)(_att_sp.yaw_body));
-        _y_nom = cross(_z_nom, x_Snom);
-        if (_y_nom.length() < GIMBAL_LOCK_THRESHOLD) {
-			gimbal_lock_maneuver();	// deal with gimbal lock
-			return;
-		}
-		/** TODO perfom nearness check for rotation (Mellinger & Kumar, Section IV) */
-		_y_nom.normalize();
-		_x_nom = cross(_y_nom, _z_nom);
-		R_N2W.set_col(0, _x_nom);
-		R_N2W.set_col(1, _y_nom);
-		R_N2W.set_col(2, _z_nom);      
-        
-        // nominal angular velocity
-        uT1_nom = -_mass*dot(_jerk_nom, _z_nom);
-        h_Omega = -(1.0f/uT_nom)*(uT1_nom*_z_nom + _mass*_jerk_nom);
-        _Om_nom(0) = -dot(h_Omega, _y_nom);
-        _Om_nom(1) = dot(h_Omega, _x_nom);
-        _Om_nom(2) = psi1_nom*_z_nom(2);
+		
+		// nominal thrust, orientation, and angular velocity
+		force_orientation_mapping(_R_N2W, x_nom, y_nom, z_nom,
+			uT_nom, uT1_nom, _Om_nom, h_omega,
+			_F_nom);
+		
+		// nominal body axes and angular velocity
+		angular_calculations(R_N2W, x_nom, y_nom, z_nom,
+			_Om_nom, uT1_nom, h_omega,
+			_F_nom, uT_nom);
         
         // nominal angular acceleration
         uT2_nom = -dot(_mass*_snap_nom + cross(
-			_Om_nom, cross(_Om_nom, _z_nom)), _z_nom);
-        h_alpha = =-(1.0f/uT_nom)*(_mass*_snap_nom + uT2_nom*_z_nom + 
-			2.0f*uT1_nom*cross(_Om_nom, _z_nom) + cross(
-			_Om_nom, cross(_Om_nom, _z_nom)));
-		al_nom(0) = -dot(h_alpha, _y_nom);
-		al_nom(1) = dot(h_alpha, _x_nom);
-		al_nom(2) = psi2_nom*_z_nom - psi1_nom*h_Omega)(2);
+			_Om_nom, cross(_Om_nom, z_nom)), z_nom);
+        h_alpha = =-(1.0f/uT_nom)*(_mass*_snap_nom + uT2_nom*z_nom + 
+			2.0f*uT1_nom*cross(_Om_nom, z_nom) + cross(
+			_Om_nom, cross(_Om_nom, z_nom)));
+		al_nom(0) = -dot(h_alpha, y_nom);
+		al_nom(1) = dot(h_alpha, x_nom);
+		al_nom(2) = psi2_nom*z_nom - psi1_nom*h_Omega)(2);
 		
 		// nominal moment input
 		_M_nom = _J_B*(R_W2B*R_N2W*al_nom - cross(_Om_body, R_W2B*R_N2W*_Om_nom)) +
@@ -988,6 +1010,11 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 	F_cor.zero();
 	F_cor = pos_err.emult(k_pos) + vel_err.emult(k_vel);
 	
+	/* map corrective force to input thrust, desired orientation, and desired angular velocity */
+	force_orientation_mapping(R_D2W, x_des, y_des, z_des,
+			uT_des, uT1_des, Om_des, h_omega,
+			F_cor);
+	// uT_des is the first input value
 	
 	/* rotational corrective input */
 	
