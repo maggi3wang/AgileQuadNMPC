@@ -296,6 +296,11 @@ private:
 	 */
 	void		limit_pos_nom_offset();
 
+	/**
+	 * Cross product between two vectors
+	 */
+	 math::Vector<3>	cross_product(const math::Vector<3>& vec1, 
+							const math::Vector<3>& vec2);
 
 	/**
 	 * Set position setpoint using offboard control
@@ -750,6 +755,20 @@ MulticopterTrajectoryControl::limit_pos_nom_offset()
 	}
 }
 
+math::Vector<3> 
+MulticopterTrajectoryControl::cross_product(const math::Vector<3>& vec1, 
+		const math::Vector<3>& vec2)
+{
+	/* cross product between two vectors*/
+	math::Vector<3> res;
+	
+	res(0) = vec1(1)*vec2(2) - vec2(1)*vec1(2);
+	res(1) = vec2(0)*vec1(2) - vec1(0)*vec2(2);
+	res(2) = vec1(0)*vec2(1) - vec2(0)*vec1(1);
+	
+	return res;
+
+}
 
 
 bool
@@ -912,6 +931,10 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_t)
                 cur_spline_t - _spline_cumt_sec.at(cur_seg-1);
     float poly_term_t = cur_seg == 0 ? 0.0f : _spline_delt_sec.at(cur_seg-1);
     
+    // access current body rotation
+    math::Matrix<3, 3> R_BW;	/** R_BW rotates vectors in body from to world */
+    R_BW.set(_att.R);
+    
     if (cur_spline_t <= 0) {
         
         _pos_nom(0) = poly_eval(_x_coefs.at(0), 0.0f);
@@ -964,11 +987,29 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_t)
         _snap_nom(2) = poly_eval(_zs_coefs.at(cur_seg), cur_poly_t);
         
         // nominal force in world frame (eqn 16)
-        _F_nom = _jerk_nom*mass - z_W*(mass*grav);
+        _F_nom = _acc_nom*mass - z_W*(mass*grav);
+        if (_F_nom.length() < FREEFALL_THRESHOLD) {
+			stable_freefall();	// perform a min-thrust, stable freefall
+			return;
+		}
+		
+		// nominal thrust input
+		_u1_nom = -dot_product(
         
         // nominal body axis in world frame
         _z_nom = (-1)*_F_nom.normalized();	// (eqn 15)
-        
+        math::Vector<3> x_Snom;
+        x_Snom.zero();
+        x_Snom(0) = (float)cos((double)(_att_sp.yaw_body));
+        x_Snom(1) = (float)sin((double)(_att_sp.yaw_body));
+        _y_nom = cross_product(_z_nom, x_Snom);
+        if (_y_nom.length() < GIMBAL_LOCK_THRESHOLD) {
+			gimbal_lock_maneuver();	// deal with gimbal lock
+			return;
+		}
+		/** TODO perfom nearness check for rotation (Mellinger & Kumar, Section IV) */
+		_y_nom.normalize();
+		_x_nom = cross_product(_y_nom, _z_nom);      
         
         // 
 		
