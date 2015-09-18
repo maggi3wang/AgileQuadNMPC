@@ -9,9 +9,6 @@
  * @author Ross Allen <rallen10@stanford.edu>
  */
  
- #define USE_TRAJ_PARAMS true
- 
- 
 /**
  * Proportional gain for horizontal position error
  *

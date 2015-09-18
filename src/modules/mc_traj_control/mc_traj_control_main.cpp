@@ -158,8 +158,6 @@ private:
 		float thr_min;
 		float thr_max;
 		float tilt_max_air;
-		float land_speed;
-		float tilt_max_land;
 		math::Vector<3> vel_max;
 		math::Vector<3> sp_offs_max;
 	}		_safe_params;
@@ -243,12 +241,11 @@ private:
 	 */
 	void		poll_subscriptions();
 
-	static float	scale_control(float ctl, float end, float dz);
-
 	/**
 	 * Update reference for local position projection
 	 */
 	void		update_ref();
+	
 	/**
 	 * Reset position setpoint to current position
 	 */
@@ -283,6 +280,9 @@ private:
     void        trajectory_nominal_state(float t, float start_t);
     void		trajectory_feedback_controller();
     void        reset_trajectory();
+	void		force_orientation_mapping(math::Matrix<3,3>& R_S2W, math::Vector<3>& x_s, math::Vector<3>& y_s, math::Vector<3>& z_s,
+					float& uT_s, float& uT1_s, math::Vector<3>& Om_s, math::Vector<3>& h_omega,
+					const math::Vector<3>& F_s)
     
     /**
      * Evaluate polynomials
@@ -292,16 +292,6 @@ private:
     void        vector_cum_sum(const std::vector<float>& vec, float initval, std::vector<float>& vecsum);
     void        poly_deriv(const std::vector< std::vector<float> >& poly, std::vector< std::vector<float> >& deriv);
     
-    
-    /**
-	 * Set position setpoint for AUTO
-	 */
-	void		control_auto(float dt);
-
-	/**
-	 * Select between barometric and global (AMSL) altitudes
-	 */
-	void		select_alt(bool global);
 
 	/**
 	 * Shim for calling task_main from task_create.
@@ -366,17 +356,30 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     memset(&_actuators, 0, sizeof(_actuators));
 
 	memset(&_ref_pos, 0, sizeof(_ref_pos));
-
-	/* retrieve safety parameters */
-	_safe_params.vel_max = ;
-	_safe_params.sp_offs_max = _safe_params.vel_max.edivide(_gains.pos) * 2.0f;
 	
 	/* retrieve control gains */
-	_gains.pos.zero();
-	_gains.vel.zero();
-	_gains.ang.zero();
-	_gains.omg.zero();
+	_gains.pos(0) = TRAJ_GAINS_XY_POS;
+	_gains.pos(1) = TRAJ_GAINS_XY_POS;
+	_gains.pos(2) = TRAJ_GAINS_Z_POS;
+	_gains.vel(0) = TRAJ_GAINS_XY_VEL;
+	_gains.vel(1) = TRAJ_GAINS_XY_VEL;
+	_gains.vel(2) = TRAJ_GAINS_Z_VEL;
+	_gains.ang(0) = TRAJ_GAINS_RP_ANG;
+	_gains.ang(1) = TRAJ_GAINS_RP_ANG;
+	_gains.ang(2) = TRAJ_GAINS_YAW_ANG;
+	_gains.omg(0) = TRAJ_GAINS_RP_OMG;
+	_gains.omg(1) = TRAJ_GAINS_RP_OMG;
+	_gains.omg(2) = TRAJ_GAINS_YAW_OMG;
 
+	/* retrieve safety parameters */
+	_safe_params.thr_min = TRAJ_PARAMS_THR_MIN ;
+	_safe_params.thr_max = TRAJ_PARAMS_THR_MAX ;
+	_safe_params.tilt_max_air = TRAJ_PARAMS_TILTMAX_AIR;
+	_safe_params.vel_max(0) = TRAJ_PARAMS_XY_VEL_MAX;
+	_safe_params.vel_max(1) = TRAJ_PARAMS_XY_VEL_MAX;
+	_safe_params.vel_max(2) = TRAJ_PARAMS_Z_VEL_MAX;
+	_safe_params.sp_offs_max = _safe_params.vel_max.edivide(_gains.pos) * 2.0f;
+	
 
 	_pos.zero();
 	_pos_nom.zero();
@@ -472,20 +475,6 @@ MulticopterTrajectoryControl::poll_subscriptions()
     
 }
 
-float
-MulticopterTrajectoryControl::scale_control(float ctl, float end, float dz)
-{
-	if (ctl > dz) {
-		return (ctl - dz) / (end - dz);
-
-	} else if (ctl < -dz) {
-		return (ctl + dz) / (end - dz);
-
-	} else {
-		return 0.0f;
-	}
-}
-
 void
 MulticopterTrajectoryControl::task_main_trampoline(int argc, char *argv[])
 {
@@ -525,10 +514,10 @@ MulticopterTrajectoryControl::reset_pos_nom()
 	if (_reset_pos_nom) {
 		_reset_pos_nom = false;
 		/* shift position setpoint to make attitude setpoint continuous */
-		_pos_nom(0) = _pos(0) + (_vel(0) - _att_sp.R_body[0][2] * _att_sp.thrust / _params.vel_p(0)
-				- _params.vel_ff(0) * _sp_move_rate(0)) / _gains.pos(0);
-		_pos_nom(1) = _pos(1) + (_vel(1) - _att_sp.R_body[1][2] * _att_sp.thrust / _params.vel_p(1)
-				- _params.vel_ff(1) * _sp_move_rate(1)) / _gains.pos(1);
+		_pos_nom(0) = _pos(0) + (_vel(0) - _vel_nom(0) - 
+				R_N2W(0,2) * _thrust_sp / _gains.vel(0)) / _gains.pos(0);
+		_pos_nom(1) = _pos(1) + (_vel(1) - _vel_nom(1) - 
+				R_N2W(0,1) * _thrust_sp / _gains.vel(1)) / _gains.pos(0);
 		mavlink_log_info(_mavlink_fd, "[mpc] reset pos sp: %.2f, %.2f", (double)_pos_nom(0), (double)_pos_nom(1));
 	}
 }
@@ -538,7 +527,7 @@ MulticopterTrajectoryControl::reset_alt_nom()
 {
 	if (_reset_alt_nom) {
 		_reset_alt_nom = false;
-		_pos_nom(2) = _pos(2) + (_vel(2) - _params.vel_ff(2) * _sp_move_rate(2)) / _gains.pos(2);
+		_pos_nom(2) = _pos(2) + (_vel(2) - _vel_nom(2)) / _gains.pos(2);
 		mavlink_log_info(_mavlink_fd, "[mpc] reset alt sp: %.2f", -(double)_pos_nom(2));
 	}
 }
@@ -726,7 +715,7 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_t)
         _snap_nom(2) = poly_eval(_zs_coefs.at(cur_seg), cur_poly_t);
         
         // nominal force in world frame (eqn 16)
-        _F_nom = _acc_nom*mass - z_W*(mass*grav);
+        _F_nom = _acc_nom*_mass - z_W*(_mass*GRAV);
         if (_F_nom.length() < FREEFALL_THRESHOLD) {
 			stable_freefall();	// perform a min-thrust, stable freefall
 			return;
@@ -804,19 +793,27 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 
 /* hold position */
 void
-MulticopterTrajectoryControl::trajectory_hold()
+MulticopterTrajectoryControl::hold_position()
 {
-        
-    reset_alt_nom();
-    reset_pos_nom();
     
-    _vel_nom(0) = 0.0f;
-    _vel_nom(1) = 0.0f;
-    _vel_nom(2) = 0.0f;
+    // set position derivatives to zero
+    _vel_nom.zero();
+    _acc_nom.zero();
+    _jerk_nom.zero();
+    _snap_nom.zero();
     
-    _acc_nom(0) = 0.0f;
-    _acc_nom(1) = 0.0f;
-    _acc_nom(2) = 0.0f;
+    // Set to hold current yaw
+    _R_N2W = !!!!!!;
+    
+    // zero angular rates
+    _Omg_nom.zeros();
+    
+    // Force to just couteract gravity
+    _F_nom.zero();
+    _F_nom(2) = -_mass*GRAV;
+    
+    // nominally no moment
+    _M_nom.zero();
         
 }
 
@@ -891,7 +888,7 @@ const std::vector<float>& vec, float initval, std::vector<float>& vecsum){
     vecsum = vec;   // overwrite anything currently in vecsum
     vecsum.at(0) += initval;
     std::partial_sum(vecsum.begin(), vecsum.end(), vecsum.begin());
-        
+        px4 mathlib doxygen
 }
 
 /* Evaluate derivatives of a polynomial */
@@ -951,7 +948,7 @@ MulticopterTrajectoryControl::task_main()
 	/* initialize values of critical structs until first regular update */
 	_arming.armed = false;
 
-	/* get an initial update for all sensor and status data */
+	/* get an initial update for all sensor and status data */px4 mathlib doxygen
 	poll_subscriptions();
 
 	bool was_armed = false;
@@ -1045,7 +1042,6 @@ MulticopterTrajectoryControl::task_main()
 			_vel(2) = _local_pos.vz;
 
 			_vel_nom.zero();
-			//~ _sp_move_rate.zero();
             _acc_nom.zero();
                 
                 
@@ -1058,7 +1054,7 @@ MulticopterTrajectoryControl::task_main()
 				_reset_pos_nom = true;
 			
 				// Initial computations at start of trajectory
-				if (!_control_trajectory_started) {
+				if (!_control_trajectory_started) {px4 mathlib doxygen
 					
 					_control_trajectory_started = true;
 					
@@ -1142,6 +1138,11 @@ MulticopterTrajectoryControl::task_main()
 			 */
 			 trajectory_feeback_controller();
 			 _att_control = _M_sp;
+			 
+			 /**
+			  * Apply safety checks
+			  */
+			  
 			 
 
 			/* publish actuator controls */
