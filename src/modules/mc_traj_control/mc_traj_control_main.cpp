@@ -208,19 +208,24 @@ private:
 	math::Vector<3> _pos;
 	math::Vector<3> _pos_nom;		/**< nominal position */
 	math::Vector<3> _vel;
-	math::Vector<3> _vel_sp;
-	math::Vector<3> _vel_prev;		/**< velocity on previous step */
+	//~ math::Vector<3> _vel_sp;
+	//~ math::Vector<3> _vel_prev;		/**< velocity on previous step */
 	math::Vector<3> _vel_nom;		/**< nominal velocity */
-	math::Vector<3> _sp_move_rate;
+	//~ math::Vector<3> _sp_move_rate;
     math::Vector<3> _acc_nom;       /**< nominal acceleration */
     math::Vector<3> _jerk_nom;      /**< nominal jerk (3rd derivative) */
     math::Vector<3> _snap_nom;   	/**< nominal snap (4rd derivative) */
     //~ math::Vector<3> _x_nom;			/**< nominal x-axis of quadrotor expressed in world coords */
     //~ math::Vector<3> _y_nom;			/**< nominal x-axis of quadrotor expressed in world coords */
     //~ math::Vector<3> _z_nom;			/**< nominal x-axis of quadrotor expressed in world coords */
+    math::Vector<3> _Omg_nom;		/**< nominal angular velocity wrt to world, expressed in nominal */
     math::Vector<3> _F_nom;			/**< nominal force expressed in world coords */
-    math::Vector<3>	_att_control;	/**< attitude control vector */
+    math::Vector<3> _F_cor;			/**< corrective force in world coords */
     float			_thrust_sp;		/**< thrust setpoint */
+    math::Vector<3> _M_nom;			/**< nominal moment expressed in body coords */
+    math::Vector<3> _M_cor;			/**< corrective moment expressed in body coords */
+    math::Vector<3> _M_sp			/**< moment setpoint in body coords */
+    math::Vector<3>	_att_control;	/**< attitude control vector */
     
     int _n_spline_seg;      /** < number of segments in spline (not max number, necassarily) */
     
@@ -413,19 +418,24 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 	_pos.zero();
 	_pos_nom.zero();
 	_vel.zero();
-	_vel_sp.zero();
-	_vel_prev.zero();
+	//~ _vel_sp.zero();
+	//~ _vel_prev.zero();
 	_vel_nom.zero();
-	_sp_move_rate.zero();
+	//~ _sp_move_rate.zero();
     _acc_nom.zero();
     _jerk_nom.zero();
     _snap_nom.zero();
     //~ _x_nom.zero();
     //~ _y_nom.zero();
     //~ _z_nom.zero();
+    _Omg_nom.zero();
     _F_nom.zero();
-    _att_control.zero();
+    _F_cor.zero();
     _thrust_sp = 0.0f;
+    _M_nom.zero();
+    _M_cor.zero();
+    _M_sp.zero();
+    _att_control.zero();
     
     /** TODO: update with better estimate */
     _mass = 0.0f;
@@ -476,138 +486,6 @@ MulticopterTrajectoryControl::~MulticopterTrajectoryControl()
 	}
 
 	pos_control::g_control = nullptr;
-}
-
-int
-MulticopterTrajectoryControl::parameters_update(bool force)
-{
-	bool updated;
-	struct parameter_update_s param_upd;
-
-	orb_check(_params_sub, &updated);
-
-	if (updated) {
-		orb_copy(ORB_ID(parameter_update), _params_sub, &param_upd);
-	}
-
-	if (updated || force) {
-            
-        /* Overide certain parameters for position control 
-         * Added for simplicity so as not to have to hunt down
-         * where these values are set and modified by Ross Allen
-         */
-         
-        if (USE_ASL_PARAMS) { 
-
-            _params.thr_min = ASL_PARAMS_THR_MIN;
-
-            _params.thr_max = ASL_PARAMS_THR_MAX;
-
-            _params.tilt_max_air = ASL_PARAMS_TILTMAX_AIR;
-            _params.tilt_max_air = math::radians(_params.tilt_max_air);
-
-            _params.land_speed = ASL_PARAMS_LAND_SPEED;
-
-            _params.tilt_max_land = ASL_PARAMS_TILTMAX_LND;
-            _params.tilt_max_land = math::radians(_params.tilt_max_land);
-
-            float v;
-
-            _params.pos_p(0) = ASL_PARAMS_XY_P;
-            _params.pos_p(1) = ASL_PARAMS_XY_P;
-
-            _params.pos_p(2) = ASL_PARAMS_Z_P;
-
-            _params.vel_p(0) = ASL_PARAMS_XY_VEL_P;
-            _params.vel_p(1) = ASL_PARAMS_XY_VEL_P;
-
-            _params.vel_p(2) = ASL_PARAMS_Z_VEL_P;
-
-            _params.vel_i(0) = ASL_PARAMS_XY_VEL_I;
-            _params.vel_i(1) = ASL_PARAMS_XY_VEL_I;
-
-            _params.vel_i(2) = ASL_PARAMS_Z_VEL_I;
-
-            _params.vel_d(0) = ASL_PARAMS_XY_VEL_D;
-            _params.vel_d(1) = ASL_PARAMS_XY_VEL_D;
-
-            _params.vel_d(2) = ASL_PARAMS_Z_VEL_D;
-
-            _params.vel_max(0) = ASL_PARAMS_XY_VEL_MAX;
-            _params.vel_max(1) = ASL_PARAMS_XY_VEL_MAX;
-
-            _params.vel_max(2) = ASL_PARAMS_Z_VEL_MAX;
-
-            v = math::constrain(ASL_PARAMS_XY_FF, 0.0f, 1.0f);
-            _params.vel_ff(0) = v;
-            _params.vel_ff(1) = v;
-
-            v = math::constrain(ASL_PARAMS_Z_FF, 0.0f, 1.0f);
-            _params.vel_ff(2) = v;
-
-            _params.sp_offs_max = _params.vel_max.edivide(_params.pos_p) * 2.0f;
-        
-        } else {
-            
-            param_get(_params_handles.thr_min, &_params.thr_min);
-            param_get(_params_handles.thr_max, &_params.thr_max);
-            param_get(_params_handles.tilt_max_air, &_params.tilt_max_air);
-            _params.tilt_max_air = math::radians(_params.tilt_max_air);
-            param_get(_params_handles.land_speed, &_params.land_speed);
-            param_get(_params_handles.tilt_max_land, &_params.tilt_max_land);
-            _params.tilt_max_land = math::radians(_params.tilt_max_land);
-
-            float v;
-            param_get(_params_handles.xy_p, &v);
-            _params.pos_p(0) = v;
-            _params.pos_p(1) = v;
-            
-            param_get(_params_handles.z_p, &v);
-            _params.pos_p(2) = v;
-            
-            param_get(_params_handles.xy_vel_p, &v);
-            _params.vel_p(0) = v;
-            _params.vel_p(1) = v;
-            
-            param_get(_params_handles.z_vel_p, &v);
-            _params.vel_p(2) = v;
-            
-            param_get(_params_handles.xy_vel_i, &v);
-            _params.vel_i(0) = v;
-            _params.vel_i(1) = v;
-
-            param_get(_params_handles.z_vel_i, &v);
-            _params.vel_i(2) = v;
-
-            param_get(_params_handles.xy_vel_d, &v);
-            _params.vel_d(0) = v;
-            _params.vel_d(1) = v;
-
-            param_get(_params_handles.z_vel_d, &v);
-            _params.vel_d(2) = v;
-
-            param_get(_params_handles.xy_vel_max, &v);
-            _params.vel_max(0) = v;
-            _params.vel_max(1) = v;
-
-            param_get(_params_handles.z_vel_max, &v);
-            _params.vel_max(2) = v;
-
-            param_get(_params_handles.xy_ff, &v);
-            v = math::constrain(v, 0.0f, 1.0f);
-            _params.vel_ff(0) = v;
-            _params.vel_ff(1) = v;
-
-            param_get(_params_handles.z_ff, &v);
-            v = math::constrain(v, 0.0f, 1.0f);
-            _params.vel_ff(2) = v;
-
-            _params.sp_offs_max = _params.vel_max.edivide(_params.pos_p) * 2.0f;
-                
-        }
-	}
-
-	return OK;
 }
 
 void
@@ -873,11 +751,9 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_t)
 	float uT_nom = 0.0f;	/**< nominal first input: thrust */
 	float uT1_nom = 0.0f;	/**< 1st deriv of nominal thrust input */
 	float uT2_nom = 0.0f;	/**< 2nd deriv of nominal thrust input */
-    math::Vector<3> h_Omega;
-    h_Omega.zero();
-    math::Vector<3> h_alpha;
-    h_alpha.zero();
-    math::Vector<3> ones(1.0f, 1.0f, 1.0f);
+    math::Vector<3> h_Omega; 	h_Omega.zero();
+    math::Vector<3> h_alpha;	h_alpha.zero();
+    
     
     if (cur_spline_t <= 0) {
         
@@ -885,22 +761,6 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_t)
         _pos_nom(1) = poly_eval(_y_coefs.at(0), 0.0f);
         _pos_nom(2) = poly_eval(_z_coefs.at(0), 0.0f);
         _att_sp.yaw_body = poly_eval(_yaw_coefs.at(0), 0.0f);
-        
-        _vel_nom(0) = 0.0f;
-        _vel_nom(1) = 0.0f;
-        _vel_nom(2) = 0.0f;
-        
-        _acc_nom(0) = 0.0f;
-        _acc_nom(1) = 0.0f;
-        _acc_nom(2) = 0.0f;
-        
-        _jerk_nom(0) = 0.0f;
-        _jerk_nom(1) = 0.0f;
-        _jerk_nom(2) = 0.0f;
-        
-        _snap_nom(0) = 0.0f;
-        _snap_nom(1) = 0.0f;
-        _snap_nom(2) = 0.0f;
         
         position_hold();
         
@@ -939,30 +799,25 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_t)
 			return;
 		}
 		
-		
 		// nominal thrust, orientation, and angular velocity
 		force_orientation_mapping(_R_N2W, x_nom, y_nom, z_nom,
-			uT_nom, uT1_nom, _Om_nom, h_omega,
+			uT_nom, uT1_nom, _Omg_nom, h_omega,
 			_F_nom);
 		
-		// nominal body axes and angular velocity
-		angular_calculations(R_N2W, x_nom, y_nom, z_nom,
-			_Om_nom, uT1_nom, h_omega,
-			_F_nom, uT_nom);
         
         // nominal angular acceleration
         uT2_nom = -dot(_mass*_snap_nom + cross(
-			_Om_nom, cross(_Om_nom, z_nom)), z_nom);
+			_Omg_nom, cross(_Omg_nom, z_nom)), z_nom);
         h_alpha = =-(1.0f/uT_nom)*(_mass*_snap_nom + uT2_nom*z_nom + 
-			2.0f*uT1_nom*cross(_Om_nom, z_nom) + cross(
-			_Om_nom, cross(_Om_nom, z_nom)));
+			2.0f*uT1_nom*cross(_Omg_nom, z_nom) + cross(
+			_Omg_nom, cross(_Omg_nom, z_nom)));
 		al_nom(0) = -dot(h_alpha, y_nom);
 		al_nom(1) = dot(h_alpha, x_nom);
 		al_nom(2) = psi2_nom*z_nom - psi1_nom*h_Omega)(2);
 		
 		// nominal moment input
-		_M_nom = _J_B*(R_W2B*R_N2W*al_nom - cross(_Om_body, R_W2B*R_N2W*_Om_nom)) +
-			cross(_Om_body, _J_B*_Om_body);
+		_M_nom = _J_B*(R_W2B*R_N2W*al_nom - cross(_Omg_body, R_W2B*R_N2W*_Omg_nom)) +
+			cross(_Omg_body, _J_B*_Omg_body);
         		
     } else {
         
@@ -970,22 +825,6 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_t)
         _pos_nom(1) = poly_eval(_y_coefs.at(_y_coefs.size()-1), poly_term_t);
         _pos_nom(2) = poly_eval(_z_coefs.at(_z_coefs.size()-1), poly_term_t);
         _att_sp.yaw_body = poly_eval(_yaw_coefs.at(_yaw_coefs.size()-1), poly_term_t);
-        
-        _vel_nom(0) = 0.0f;
-        _vel_nom(1) = 0.0f;
-        _vel_nom(2) = 0.0f;
-        
-        _acc_nom(0) = 0.0f;
-        _acc_nom(1) = 0.0f;
-        _acc_nom(2) = 0.0f;
-        
-        _jerk_nom(0) = 0.0f;
-        _jerk_nom(1) = 0.0f;
-        _jerk_nom(2) = 0.0f;
-        
-        _snap_nom(0) = 0.0f;
-        _snap_nom(1) = 0.0f;
-        _snap_nom(2) = 0.0f;
         
         position_hold();
     }
@@ -1017,19 +856,17 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 	
 	/* map corrective force to input thrust, desired orientation, and desired angular velocity */
 	force_orientation_mapping(R_D2W, x_des, y_des, z_des, 
-			uT_des, uT1_des, Om_des, h_omega, F_des);
+			_thrust_sp, uT1_des, Om_des, h_omega, F_des);
 	// uT_des is the first input value
 	// double check the calculation of uT1_des. F_cor doesn't affect?
 	
 	/* rotational corrective input */
 	ang_err = 0.5f*vee_map(_R_W2B*R_D2W - R_W2D*_R_B2W);
-	omg_err = _R_W2B*R_D2W*Om_des - _Om_body;
+	omg_err = _R_W2B*R_D2W*Om_des - _Omg_body;
 	
-	math::Vector<3> M_cor; M_cor.zero();	// corrective moment terms
-	M_cor = ang_err.emult(k_ang) + omg_err.emult(k_omg);
+	_M_cor = ang_err.emult(k_ang) + omg_err.emult(k_omg);
 	
-	math::Vector<3> M_in; M_in.zero();
-	M_in = M_cor + _M_nom;
+	_M_sp = _M_cor + _M_nom;
 }
 
 /* hold position */
@@ -1280,7 +1117,7 @@ MulticopterTrajectoryControl::task_main()
 			_vel(2) = _local_pos.vz;
 
 			_vel_nom.zero();
-			_sp_move_rate.zero();
+			//~ _sp_move_rate.zero();
             _acc_nom.zero();
                 
                 
@@ -1376,7 +1213,8 @@ MulticopterTrajectoryControl::task_main()
 			 * Apply feedback control to nominal trajectory
 			 */
 			 trajectory_feeback_controller();
-
+			 _att_control = _M_sp;
+			 
 
 			/* publish actuator controls */
 			_actuators.control[0] = (isfinite(_att_control(0))) ? _att_control(0) : 0.0f;
