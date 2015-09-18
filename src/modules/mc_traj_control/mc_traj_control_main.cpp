@@ -1006,18 +1006,30 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 	math::Vector<3> omg_err;
 	
 	/* translational corrective input */
-	math::Vector<3> F_cor;
-	F_cor.zero();
+	pos_err = _pos_nom - _pos;
+	vel_err = _vel_nom - _vel;
+	
+	math::Vector<3> F_cor; F_cor.zero(); 	// corrective force term
 	F_cor = pos_err.emult(k_pos) + vel_err.emult(k_vel);
 	
+	math::Vector<3> F_des; F_des.zero();	// combined, desired force
+	F_des = F_cor + _F_nom;
+	
 	/* map corrective force to input thrust, desired orientation, and desired angular velocity */
-	force_orientation_mapping(R_D2W, x_des, y_des, z_des,
-			uT_des, uT1_des, Om_des, h_omega,
-			F_cor);
+	force_orientation_mapping(R_D2W, x_des, y_des, z_des, 
+			uT_des, uT1_des, Om_des, h_omega, F_des);
 	// uT_des is the first input value
+	// double check the calculation of uT1_des. F_cor doesn't affect?
 	
 	/* rotational corrective input */
+	ang_err = 0.5f*vee_map(_R_W2B*R_D2W - R_W2D*_R_B2W);
+	omg_err = _R_W2B*R_D2W*Om_des - _Om_body;
 	
+	math::Vector<3> M_cor; M_cor.zero();	// corrective moment terms
+	M_cor = ang_err.emult(k_ang) + omg_err.emult(k_omg);
+	
+	math::Vector<3> M_in; M_in.zero();
+	M_in = M_cor + _M_nom;
 }
 
 /* hold position */
