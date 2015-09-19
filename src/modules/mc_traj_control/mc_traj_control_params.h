@@ -68,22 +68,21 @@
 /**
  * Minimum thrust
  *
- * Minimum vertical thrust. It's recommended to set it > 0 to avoid free fall with zero thrust.
- *
+ * Minimum vertical acceleration due to thrust. It's recommended to set it > 0 to avoid free fall with zero thrust.
+ * 
+ * @unit m/s^2
  * @min 0.0
- * @max 1.0
  */
-#define TRAJ_PARAMS_THR_MIN 0.1f
+#define TRAJ_PARAMS_VERT_ACC_MIN 1.0f
 
 /**
  * Maximum thrust
  *
- * Limit max allowed thrust.
+ * Maximum vertical acceleration due to thrust. I
  *
- * @min 0.0
- * @max 1.0
+ * @unit m/s^2
  */
-#define TRAJ_PARAMS_THR_MAX 1.0f
+#define TRAJ_PARAMS_VERT_ACC_MAX 30.0f
 
 /**
  * Maximum horizontal velocity
@@ -123,3 +122,13 @@
  * @min 0.0
  */
 #define TRAJ_PARAMS_GIMBAL_LOCK 0.05f
+
+/**
+ * Threshold for free fall
+ * 
+ * Max downward acceleration becomes: 9.81 - FREEFALL_THRESHOLD
+ *
+ * @unit m/s^2
+ * @min 0.0
+ */
+#define TRAJ_PARAMS_FREEFALL_THRESHOLD 1.0f
