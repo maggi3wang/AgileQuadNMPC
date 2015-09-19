@@ -117,20 +117,9 @@
 #define TRAJ_PARAMS_TILTMAX_AIR 45.0f
 
 /**
- * Maximum tilt during landing
+ * Threshold for gimbal lock safety check
  *
- * Limits maximum tilt angle on landing.
- *
- * @unit deg
- * @min 0.0
- * @max 90.0
- */
-#define TRAJ_PARAMS_TILTMAX_LND 15.0f
-
-/**
- * Landing descend rate
- *
- * @unit m/s
+ * @unit unitless
  * @min 0.0
  */
-#define TRAJ_PARAMS_LAND_SPEED 1.0f
+#define TRAJ_PARAMS_GIMBAL_LOCK 0.05f
