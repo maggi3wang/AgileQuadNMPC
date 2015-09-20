@@ -22,6 +22,8 @@
  */
 
 struct trajectory_nominal_values_s {
+	uint64_t timestamp;		/**< in microseconds since system start, is set whenever the writing thread stores new data */
+	
 	float x;			/**< [m] x-pos in world NED coords */
 	float y;			/**< [m] y-pos in world NED coords */
 	float z;			/**< [m] z-pos in world NED coords */

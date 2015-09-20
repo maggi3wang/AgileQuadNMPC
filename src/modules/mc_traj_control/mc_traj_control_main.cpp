@@ -63,8 +63,8 @@
 #include <uORB/topics/parameter_update.h>
 #include <uORB/topics/vehicle_local_position.h>
 #include <uORB/topics/vehicle_global_velocity_setpoint.h>
-#include <uORB/topics/vehicle_velocity_feed_forward.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
+#include <uORB/topics/trajectory_nominal_values.h>
 #include <uORB/topics/trajectory_spline.h>
 #include <uORB/topics/actuator_controls.h>
 #include <systemlib/param/param.h>
@@ -128,30 +128,29 @@ private:
 	int		_mavlink_fd;			/**< mavlink fd */
 
 	int		_att_sub;				/**< vehicle attitude subscription */
-	int		_att_sp_sub;			/**< vehicle attitude setpoint */
 	int		_control_mode_sub;		/**< vehicle control mode subscription */
 	int		_arming_sub;			/**< arming status of outputs */
 	int		_local_pos_sub;			/**< vehicle local position */
-	int		_local_pos_nom_sub;		/**< offboard local position setpoint */
-	int		_global_vel_sp_sub;		/**< offboard global velocity setpoint */
     int     _traj_spline_sub;       /**< trajectory spline */
 
 	orb_advert_t	_att_sp_pub;			/**< attitude setpoint publication */
+	orb_advert_t	_att_rates_sp_pub;		/**< attitude rates setpoint publication */
 	orb_advert_t	_local_pos_nom_pub;		/**< vehicle local position setpoint publication */
 	orb_advert_t	_global_vel_sp_pub;		/**< vehicle global velocity setpoint publication */
-    orb_advert_t    _vel_nom_uorb_pub;       /**< vehicle velocity feed forward publication */
     orb_advert_t	_actuators_0_pub;		/**< attitude actuator controls publication */
+    orb_advert_t	_traj_nom_pub;			/**< nominal trajectory state and input values publication*/
 
 	struct vehicle_attitude_s			_att;			/**< vehicle attitude */
 	struct vehicle_attitude_setpoint_s	_att_sp;		/**< vehicle attitude setpoint */
+	struct vehicle_rates_setpoint_s		_att_rates_sp;	/**< vehicle attitude rates setpoint */
 	struct vehicle_control_mode_s		_control_mode;	/**< vehicle control mode */
 	struct actuator_armed_s				_arming;		/**< actuator arming status */
 	struct vehicle_local_position_s		_local_pos;		/**< vehicle local position */
 	struct vehicle_local_position_setpoint_s	_local_pos_nom;		/**< vehicle local position setpoint */
 	struct vehicle_global_velocity_setpoint_s	_global_vel_sp;	/**< vehicle global velocity setpoint */
-    struct vehicle_velocity_feed_forward_s      _vel_nom_uorb;   /**< vehicle velocity feed forward term */
     struct trajectory_spline_s  		_traj_spline;   /**< trajectory spline */
     struct actuator_controls_s			_actuators;		/**< actuator controls */
+    struct trajectory_nominal_values_s	_traj_nom;		/**< nominal trajectory values */
 
 
 	struct {
@@ -356,19 +355,18 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 
 /* subscriptions */
 	_att_sub(-1),
-	_att_sp_sub(-1),
 	_control_mode_sub(-1),
 	_arming_sub(-1),
 	_local_pos_sub(-1),
-	_global_vel_sp_sub(-1),
     _traj_spline_sub(-1),
 
 /* publications */
 	_att_sp_pub(-1),
+	_att_rates_sp_pub(-1),
 	_local_pos_nom_pub(-1),
 	_global_vel_sp_pub(-1),
-    _vel_nom_uorb_pub(-1),
     _actuators_0_pub(-1),
+    _traj_nom_pub(-1),
 
 	_ref_alt(0.0f),
 	_ref_timestamp(0),
@@ -378,14 +376,15 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 {
 	memset(&_att, 0, sizeof(_att));
 	memset(&_att_sp, 0, sizeof(_att_sp));
+	memset(&_att_rates_sp, 0, sizeof(_att_rates_sp));
 	memset(&_control_mode, 0, sizeof(_control_mode));
 	memset(&_arming, 0, sizeof(_arming));
 	memset(&_local_pos, 0, sizeof(_local_pos));
 	memset(&_local_pos_nom, 0, sizeof(_local_pos_nom));
 	memset(&_global_vel_sp, 0, sizeof(_global_vel_sp));
-    memset(&_vel_nom_uorb, 0, sizeof(_vel_nom_uorb));
     memset(&_traj_spline, 0, sizeof(_traj_spline));
     memset(&_actuators, 0, sizeof(_actuators));
+    memset(&_traj_nom, 0, sizeof(_traj_nom));
 
 	memset(&_ref_pos, 0, sizeof(_ref_pos));
 	
@@ -494,20 +493,14 @@ MulticopterTrajectoryControl::poll_subscriptions()
 		ang_rates(0) = _att.rollspeed;
 		ang_rates(1) = _att.pitchspeed;
 		ang_rates(2) = _att.yawspeed;
-		math::Matrix<3, 3> Tmat;	Tmat.zero();
-		Tmat(0, 0) = (float)cos((double) _att.pitch);
-		Tmat(0, 2) = -(float)(cos((double) _att.roll)*sin((double) _att.pitch));
-		Tmat(1, 1) = 1.0f;
-		Tmat(1, 2) = (float)sin((double) _att.roll);
-		Tmat(2, 0) = (float)sin((double) _att.pitch);
-		Tmat(2, 2) = (float)(cos((double) _att.roll)*cos((double) _att.pitch));
-		_Omg_body = Tmat*ang_rates;
-	}
-
-	orb_check(_att_sp_sub, &updated);
-
-	if (updated) {
-		orb_copy(ORB_ID(vehicle_attitude_setpoint), _att_sp_sub, &_att_sp);
+		math::Matrix<3, 3> T_dot2omg;	T_dot2omg.zero();
+		T_dot2omg(0, 0) = (float)cos((double) _att.pitch);
+		T_dot2omg(0, 2) = -(float)(cos((double) _att.roll)*sin((double) _att.pitch));
+		T_dot2omg(1, 1) = 1.0f;
+		T_dot2omg(1, 2) = (float)sin((double) _att.roll);
+		T_dot2omg(2, 0) = (float)sin((double) _att.pitch);
+		T_dot2omg(2, 2) = (float)(cos((double) _att.roll)*cos((double) _att.pitch));
+		_Omg_body = T_dot2omg*ang_rates;
 	}
 
 	orb_check(_control_mode_sub, &updated);
@@ -901,11 +894,57 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 		y_des = -y_des;
 		ang_err = ang_err_neg;
 	}
+	
+	/* fill attitude setpoint */
+	_att_sp.timestamp = hrt_absolute_time();
+	math::Vector<3> eul_des = R_D2W.to_euler();
+	_att_sp.roll_body = eul_des(0);
+	_att_sp.pitch_body = eul_des(1);
+	_att_sp.yaw_body = eul_des(2);
+	_att_sp.R_valid = false;
+	_att_sp.thrust = _thrust_sp;
+	_att_sp.q_d_valid = false;
+	_att_sp.q_e_valid = false;
+	
+	/* publish attitude setpoint */
+	if (_att_sp_pub > 0) {
+		orb_publish(ORB_ID(vehicle_attitude_setpoint), _att_sp_pub, &_att_sp);
 
+	} else {
+		_att_sp_pub = orb_advertise(ORB_ID(vehicle_attitude_setpoint), &_att_sp);
+	}
+	
+	/* fill attitude rates setpoint */
+	_att_rates_sp.timestamp = hrt_absolute_time();
+	math::Matrix<3,3> T_omg2dot;	T_omg2dot.zero();	// transformation matrix from angular velocity in body coords to euler rates
+	T_omg2dot(0,0) = (float)cos((double)eul_des(1));
+	T_omg2dot(0,2) = (float)sin((double)eul_des(1));
+	T_omg2dot(1,0) = (float)(sin((double)eul_des(1))*tan((double)eul_des(0)));
+	T_omg2dot(1,1) = 1.0f;
+	T_omg2dot(1,2) = -(float)(cos((double)eul_des(1))*tan((double)eul_des(1)));
+	T_omg2dot(2,0) = -(float)(sin((double)eul_des(1))/cos((double)eul_des(0)));
+	T_omg2dot(2,2) = (float)(cos((double)eul_des(1))/cos((double)eul_des(0)));
+	math::Vector<3> eul_rates_des = T_omg2dot*Omg_des;
+	_att_rates_sp.roll = eul_rates_des(0);
+	_att_rates_sp.pitch = eul_rates_des(1);
+	_att_rates_sp.yaw = eul_rates_des(2);
+	
+	/* publish attitude rates setpoint */
+	if (_att_rates_sp_pub > 0) {
+		orb_publish(ORB_ID(vehicle_rates_setpoint), _att_rates_sp_pub, &_att_rates_sp);
+
+	} else {
+		_att_rates_sp_pub = orb_advertise(ORB_ID(vehicle_rates_setpoint), &_att_rates_sp);
+	}
+	
+
+	/* calculated angular velocity error */
 	omg_err = (_R_B2W.transposed())*R_D2W*Omg_des - _Omg_body;
 	
+	/* calculate corrective (feedback) moment inputs */
 	_M_cor = ang_err.emult(_gains.ang) + omg_err.emult(_gains.omg);
 	
+	/* calculate moment inputs */
 	_M_sp = _M_cor + _M_nom;
 }
 
@@ -1063,12 +1102,9 @@ MulticopterTrajectoryControl::task_main()
 	 * do subscriptions
 	 */
 	_att_sub = orb_subscribe(ORB_ID(vehicle_attitude));
-	_att_sp_sub = orb_subscribe(ORB_ID(vehicle_attitude_setpoint));
 	_control_mode_sub = orb_subscribe(ORB_ID(vehicle_control_mode));
 	_arming_sub = orb_subscribe(ORB_ID(actuator_armed));
 	_local_pos_sub = orb_subscribe(ORB_ID(vehicle_local_position));
-	_local_pos_nom_sub = orb_subscribe(ORB_ID(vehicle_local_position_setpoint));
-	_global_vel_sp_sub = orb_subscribe(ORB_ID(vehicle_global_velocity_setpoint));
     _traj_spline_sub = orb_subscribe(ORB_ID(trajectory_spline));
 
 
@@ -1249,12 +1285,37 @@ MulticopterTrajectoryControl::task_main()
 			/**
 			 * Publish topics
 			 */
-			 /* fill local position setpoint */
+			 
+			/* fill nominal trajectory values */
+			_traj_nom.timestamp = hrt_absolute_time();
+			_traj_nom.x = _pos_nom(0);
+			_traj_nom.y = _pos_nom(1);
+			_traj_nom.z = _pos_nom(2);
+			_traj_nom.vx = _vel_nom(0);
+			_traj_nom.vy = _vel_nom(1);
+			_traj_nom.vz = _vel_nom(2);
+			_traj_nom.p = _Omg_nom(0);
+			_traj_nom.q = _Omg_nom(1);
+			_traj_nom.r = _Omg_nom(2);
+			math::Vector<3> eul_nom = _R_N2W.to_euler();
+			_traj_nom.phi = eul_nom(0);
+			_traj_nom.theta = eul_nom(1);
+			_traj_nom.psi = _psi_nom;
+			 
+			/* publish nominal trajectory values */
+			if (_traj_nom_pub > 0) {
+				orb_publish(ORB_ID(trajectory_nominal_values), _traj_nom_pub, &_traj_nom);
+
+			} else {
+				_traj_nom_pub = orb_advertise(ORB_ID(trajectory_nominal_values), &_traj_nom);
+			}
+			 
+			/* fill local position setpoint */
 			_local_pos_nom.timestamp = hrt_absolute_time();
 			_local_pos_nom.x = _pos_nom(0);
 			_local_pos_nom.y = _pos_nom(1);
 			_local_pos_nom.z = _pos_nom(2);
-			_local_pos_nom.yaw = _att_sp.yaw_body;
+			_local_pos_nom.yaw = _psi_nom;
 
 			/* publish local position setpoint */
 			if (_local_pos_nom_pub > 0) {
@@ -1264,8 +1325,17 @@ MulticopterTrajectoryControl::task_main()
 				_local_pos_nom_pub = orb_advertise(ORB_ID(vehicle_local_position_setpoint), &_local_pos_nom);
 			}
 			
-			
-			  
+			_global_vel_sp.vx = _vel_nom(0);
+			_global_vel_sp.vy = _vel_nom(1);
+			_global_vel_sp.vz = _vel_nom(2);
+
+			/* publish velocity setpoint */
+			if (_global_vel_sp_pub > 0) {
+				orb_publish(ORB_ID(vehicle_global_velocity_setpoint), _global_vel_sp_pub, &_global_vel_sp);
+
+			} else {
+				_global_vel_sp_pub = orb_advertise(ORB_ID(vehicle_global_velocity_setpoint), &_global_vel_sp);
+			}
 			 
 
 			/* publish actuator controls */
