@@ -79,6 +79,7 @@
 #include <uORB/topics/vision_position_estimate.h>
 #include <uORB/topics/vehicle_global_velocity_setpoint.h>
 #include <uORB/topics/vehicle_velocity_feed_forward.h>
+#include <uORB/topics/trajectory_nominal_values.h>
 #include <uORB/topics/optical_flow.h>
 #include <uORB/topics/battery_status.h>
 #include <uORB/topics/differential_pressure.h>
@@ -967,6 +968,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 		struct satellite_info_s sat_info;
 		struct wind_estimate_s wind_estimate;
         struct vehicle_velocity_feed_forward_s vel_ff;
+        struct trajectory_nominal_values_s traj_nom;
 	} buf;
 
 	memset(&buf, 0, sizeof(buf));
@@ -1010,6 +1012,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 			struct log_TECS_s log_TECS;
 			struct log_WIND_s log_WIND;
             struct log_VELF_s log_VELF;
+            struct log_TRJN_s log_TRJN;
 		} body;
 	} log_msg = {
 		LOG_PACKET_HEADER_INIT(0)
@@ -1048,6 +1051,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 		int servorail_status_sub;
 		int wind_sub;
         int vel_ff_sub;
+        int traj_nom_sub;
 	} subs;
 
 	subs.cmd_sub = -1;
@@ -1074,6 +1078,7 @@ int sdlog2_thread_main(int argc, char *argv[])
     //~ warnx("DEBUG001: attempting subscription");
     subs.vel_ff_sub = -1;
     //~ warnx("DEBUG002: subscription complete");
+    subs.traj_nom_sub = -1;
 	subs.battery_sub = -1;
 	for (unsigned i = 0; i < TELEMETRY_STATUS_ORB_ID_NUM; i++) {
 		subs.telemetry_subs[i] = -1;
@@ -1577,13 +1582,32 @@ int sdlog2_thread_main(int argc, char *argv[])
         /* --- VELOCITY FEED FORWARD --- */
         // Added by Ross Allen
         if (copy_if_updated(ORB_ID(vehicle_velocity_feed_forward), &subs.vel_ff_sub, &buf.vel_ff)) {
-            warnx("DEBUG002: updated vel feedforward");
+            //~ warnx("DEBUG002: updated vel feedforward");
             log_msg.msg_type = LOG_VELF_MSG;
             log_msg.body.log_VELF.vx = buf.vel_ff.vx;
             log_msg.body.log_VELF.vy = buf.vel_ff.vy;
             log_msg.body.log_VELF.vz = buf.vel_ff.vz;
             LOGBUFFER_WRITE_AND_COUNT(VELF);
         }
+        
+        /* --- TRAJECTORY NOMINAL VALUES --- */
+        // Added by Ross Allen
+        if (copy_if_updated(ORB_ID(trajectory_nominal_values), &subs.traj_nom_sub, &buf.traj_nom)) {
+			log_msg.msg_type = LOG_TRJN_MSG;
+			log_msg.body.log_TRJN.x = buf.traj_nom.x;
+			log_msg.body.log_TRJN.y = buf.traj_nom.y;
+			log_msg.body.log_TRJN.z = buf.traj_nom.z;
+			log_msg.body.log_TRJN.vx = buf.traj_nom.vx;
+			log_msg.body.log_TRJN.vy = buf.traj_nom.vy;
+			log_msg.body.log_TRJN.vz = buf.traj_nom.vz;
+			log_msg.body.log_TRJN.phi = buf.traj_nom.phi;
+			log_msg.body.log_TRJN.theta = buf.traj_nom.theta;
+			log_msg.body.log_TRJN.psi = buf.traj_nom.psi;
+			log_msg.body.log_TRJN.p = buf.traj_nom.p;
+			log_msg.body.log_TRJN.q = buf.traj_nom.q;
+			log_msg.body.log_TRJN.r = buf.traj_nom.r;
+			LOGBUFFER_WRITE_AND_COUNT(TRJN);
+		}
 
 		/* --- BATTERY --- */
 		if (copy_if_updated(ORB_ID(battery_status), &subs.battery_sub, &buf.battery)) {

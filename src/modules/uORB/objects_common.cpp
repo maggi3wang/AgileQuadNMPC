@@ -148,6 +148,9 @@ ORB_DEFINE(vehicle_global_velocity_setpoint, struct vehicle_global_velocity_setp
 #include "topics/vehicle_velocity_feed_forward.h"
 ORB_DEFINE(vehicle_velocity_feed_forward, struct vehicle_velocity_feed_forward_s);
 
+#include "topics/trajectory_nominal_values.h"
+ORB_DEFINE(trajectory_nominal_values, struct trajectory_nominal_values_s);
+
 #include "topics/mission.h"
 ORB_DEFINE(offboard_mission, struct mission_s);
 ORB_DEFINE(onboard_mission, struct mission_s);

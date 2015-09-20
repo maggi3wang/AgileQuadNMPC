@@ -272,6 +272,24 @@ struct log_VELF_s {
     float vz;
 };
 
+/* --- TRJN - Trajectory Nominal Values --- */
+// Added by Ross Allen
+#define LOG_TRJN_MSG 41
+struct log_TRJN_s {
+	float x;
+    float y;
+    float z;
+    float vx;
+    float vy;
+    float vz;
+    float phi;
+    float theta;
+    float psi;
+    float p;
+    float q;
+    float r;
+};
+
 /* --- BATT - BATTERY --- */
 #define LOG_BATT_MSG 20
 struct log_BATT_s {
@@ -465,6 +483,7 @@ static const struct log_format_s log_formats[] = {
 	LOG_FORMAT(ESC, "HBBBHHffiffH",		"count,nESC,Conn,N,Ver,Adr,Volt,Amp,RPM,Temp,SetP,SetPRAW"),
 	LOG_FORMAT(GVSP, "fff",			"VX,VY,VZ"),
     LOG_FORMAT(VELF, "fff",			"VX,VY,VZ"),    // Added by Ross Allen
+    LOG_FORMAT(TRJN, "ffffffffffff",	"X,Y,Z,VX,VY,VZ,PHI,THETA,PSI,P,Q,R"),
 	LOG_FORMAT(BATT, "ffff",		"V,VFilt,C,Discharged"),
 	LOG_FORMAT(DIST, "ffB",			"Bottom,BottomRate,Flags"),
 	LOG_FORMAT_S(TEL0, TEL, "BBBBHHBQ",		"RSSI,RemRSSI,Noise,RemNoise,RXErr,Fixed,TXBuf,HbTime"),

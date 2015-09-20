@@ -1239,8 +1239,17 @@ MulticopterTrajectoryControl::task_main()
 				
 			}
                   
-
-			/* fill local position setpoint */
+			
+			/**
+			 * Apply feedback control to nominal trajectory
+			 */
+			trajectory_feedback_controller();
+			_att_control = _M_sp;
+			 
+			/**
+			 * Publish topics
+			 */
+			 /* fill local position setpoint */
 			_local_pos_nom.timestamp = hrt_absolute_time();
 			_local_pos_nom.x = _pos_nom(0);
 			_local_pos_nom.y = _pos_nom(1);
@@ -1255,15 +1264,7 @@ MulticopterTrajectoryControl::task_main()
 				_local_pos_nom_pub = orb_advertise(ORB_ID(vehicle_local_position_setpoint), &_local_pos_nom);
 			}
 			
-			/**
-			 * Apply feedback control to nominal trajectory
-			 */
-			trajectory_feedback_controller();
-			_att_control = _M_sp;
-			 
-			/**
-			 * Apply safety checks
-			 */
+			
 			  
 			 
 
