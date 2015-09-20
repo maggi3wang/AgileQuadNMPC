@@ -1606,6 +1606,10 @@ int sdlog2_thread_main(int argc, char *argv[])
 			log_msg.body.log_TRJN.p = buf.traj_nom.p;
 			log_msg.body.log_TRJN.q = buf.traj_nom.q;
 			log_msg.body.log_TRJN.r = buf.traj_nom.r;
+			log_msg.body.log_TRJN.thrust = buf.traj_nom.thrust;
+			log_msg.body.log_TRJN.Mx = buf.traj_nom.Mx;
+			log_msg.body.log_TRJN.My = buf.traj_nom.My;
+			log_msg.body.log_TRJN.Mz = buf.traj_nom.Mz;
 			LOGBUFFER_WRITE_AND_COUNT(TRJN);
 		}
 

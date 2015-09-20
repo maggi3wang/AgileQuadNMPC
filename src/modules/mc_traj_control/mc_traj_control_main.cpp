@@ -202,6 +202,7 @@ private:
     math::Vector<3> _Omg_nom;		/**< nominal angular velocity wrt to world, expressed in nominal */
     math::Vector<3> _F_nom;			/**< nominal force expressed in world coords */
     math::Vector<3> _F_cor;			/**< corrective force in world coords */
+    float			_uT_nom;		/**< nominal thrust setpoint */
     float			_thrust_sp;		/**< thrust setpoint */
     math::Vector<3> _M_nom;			/**< nominal moment expressed in body coords */
     math::Vector<3> _M_cor;			/**< corrective moment expressed in body coords */
@@ -433,6 +434,7 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     _Omg_nom.zero();
     _F_nom.zero();
     _F_cor.zero();
+    _uT_nom = 0.0f;
     _thrust_sp = 0.0f;
     _M_nom.zero();
     _M_cor.zero();
@@ -575,7 +577,7 @@ MulticopterTrajectoryControl::reset_pos_nom()
 				_R_N2W(0,2) * _thrust_sp / _gains.vel(0)) / _gains.pos(0);
 		_pos_nom(1) = _pos(1) + (_vel(1) - _vel_nom(1) - 
 				_R_N2W(0,1) * _thrust_sp / _gains.vel(1)) / _gains.pos(0);
-		mavlink_log_info(_mavlink_fd, "[mpc] reset pos sp: %.2f, %.2f", (double)_pos_nom(0), (double)_pos_nom(1));
+		mavlink_log_info(_mavlink_fd, "[mtc] reset pos sp: %.2f, %.2f", (double)_pos_nom(0), (double)_pos_nom(1));
 	}
 }
 
@@ -585,7 +587,7 @@ MulticopterTrajectoryControl::reset_alt_nom()
 	if (_reset_alt_nom) {
 		_reset_alt_nom = false;
 		_pos_nom(2) = _pos(2) + (_vel(2) - _vel_nom(2)) / _gains.pos(2);
-		mavlink_log_info(_mavlink_fd, "[mpc] reset alt sp: %.2f", -(double)_pos_nom(2));
+		mavlink_log_info(_mavlink_fd, "[mtc] reset alt sp: %.2f", -(double)_pos_nom(2));
 	}
 }
 
@@ -754,7 +756,7 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_time
 	math::Vector<3> x_nom;	x_nom.zero();	/**< nominal body x-axis */
 	math::Vector<3> y_nom;	y_nom.zero();	/**< nominal body x-axis */
 	math::Vector<3> z_nom;	z_nom.zero();	/**< nominal body x-axis */
-	float uT_nom = 0.0f;	/**< nominal first input: thrust */
+	//~ float uT_nom = 0.0f;	/**< nominal first input: thrust */
 	float uT1_nom = 0.0f;	/**< 1st deriv of nominal thrust input */
 	float uT2_nom = 0.0f;	/**< 2nd deriv of nominal thrust input */
     math::Vector<3> h_Omega; 	h_Omega.zero();
@@ -813,7 +815,7 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_time
 		
 		// nominal thrust, orientation, and angular velocity
 		force_orientation_mapping(_R_N2W, x_nom, y_nom, z_nom,
-			uT_nom, uT1_nom, _Omg_nom, h_Omega,
+			_uT_nom, uT1_nom, _Omg_nom, h_Omega,
 			_F_nom, _psi_nom, _psi1_nom);
 		
         
@@ -821,7 +823,7 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_time
         uT2_nom = -dot(_snap_nom*_mass + cross(
 			_Omg_nom, cross(_Omg_nom, z_nom)), z_nom);
         h_alpha = -(_snap_nom*_mass + z_nom*uT2_nom + cross(_Omg_nom, z_nom)*2.0f*uT1_nom + 
-			cross(_Omg_nom, cross(_Omg_nom, z_nom)))*(1.0f/uT_nom);
+			cross(_Omg_nom, cross(_Omg_nom, z_nom)))*(1.0f/_uT_nom);
 		al_nom(0) = -dot(h_alpha, y_nom);
 		al_nom(1) = dot(h_alpha, x_nom);
 		al_nom(2) = dot(z_nom*_psi2_nom - h_Omega*_psi1_nom, z_W);
@@ -967,11 +969,10 @@ MulticopterTrajectoryControl::hold_position()
     math::Vector<3> x_nom;	x_nom.zero();
     math::Vector<3> y_nom;	y_nom.zero();
     math::Vector<3> z_nom;	z_nom.zero();
-    float uT_nom = 0.0f;
     float uT1_nom = 0.0f;
     math::Vector<3> h_Omega; 	h_Omega.zero();
     force_orientation_mapping(_R_N2W, x_nom, y_nom, z_nom,
-					uT_nom, uT1_nom, _Omg_nom, h_Omega,
+					_uT_nom, uT1_nom, _Omg_nom, h_Omega,
 					_F_nom, _psi_nom, _psi1_nom); 
     
     
@@ -1096,7 +1097,7 @@ MulticopterTrajectoryControl::task_main()
 	warnx("started");
 
 	_mavlink_fd = open(MAVLINK_LOG_DEVICE, 0);
-	mavlink_log_info(_mavlink_fd, "[mpc] started");
+	mavlink_log_info(_mavlink_fd, "[mtc] started");
 
 	/*
 	 * do subscriptions
@@ -1301,6 +1302,10 @@ MulticopterTrajectoryControl::task_main()
 			_traj_nom.phi = eul_nom(0);
 			_traj_nom.theta = eul_nom(1);
 			_traj_nom.psi = _psi_nom;
+			_traj_nom.thrust = _uT_nom;
+			_traj_nom.Mx = _M_sp(0);
+			_traj_nom.My = _M_sp(1);
+			_traj_nom.Mz = _M_sp(2);
 			 
 			/* publish nominal trajectory values */
 			if (_traj_nom_pub > 0) {
@@ -1368,7 +1373,7 @@ MulticopterTrajectoryControl::task_main()
 	}
 
 	warnx("stopped");
-	mavlink_log_info(_mavlink_fd, "[mpc] stopped");
+	mavlink_log_info(_mavlink_fd, "[mtc] stopped");
 
 	_control_task = -1;
 	_exit(0);

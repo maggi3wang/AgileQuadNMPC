@@ -288,6 +288,10 @@ struct log_TRJN_s {
     float p;
     float q;
     float r;
+    float thrust;
+    float Mx;
+    float My;
+    float Mz;
 };
 
 /* --- BATT - BATTERY --- */
@@ -483,7 +487,7 @@ static const struct log_format_s log_formats[] = {
 	LOG_FORMAT(ESC, "HBBBHHffiffH",		"count,nESC,Conn,N,Ver,Adr,Volt,Amp,RPM,Temp,SetP,SetPRAW"),
 	LOG_FORMAT(GVSP, "fff",			"VX,VY,VZ"),
     LOG_FORMAT(VELF, "fff",			"VX,VY,VZ"),    // Added by Ross Allen
-    LOG_FORMAT(TRJN, "ffffffffffff",	"X,Y,Z,VX,VY,VZ,PHI,THETA,PSI,P,Q,R"),
+    LOG_FORMAT(TRJN, "ffffffffffffffff",	"X,Y,Z,VX,VY,VZ,PHI,THETA,PSI,P,Q,R,THRUST,MX,MY,MZ"),
 	LOG_FORMAT(BATT, "ffff",		"V,VFilt,C,Discharged"),
 	LOG_FORMAT(DIST, "ffB",			"Bottom,BottomRate,Flags"),
 	LOG_FORMAT_S(TEL0, TEL, "BBBBHHBQ",		"RSSI,RemRSSI,Noise,RemNoise,RXErr,Fixed,TXBuf,HbTime"),

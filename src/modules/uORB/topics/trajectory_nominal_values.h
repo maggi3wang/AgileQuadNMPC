@@ -36,6 +36,10 @@ struct trajectory_nominal_values_s {
 	float p;		/**< [rad/s] angular velocity of body x-axis in body coords */
 	float q;		/**< [rad/s] angular velocity of body x-axis in body coords */
 	float r;		/**< [rad/s] angular velocity of body x-axis in body coords */
+	float thrust;	/**< [N] nominal thrust along nominal neg z axis */
+	float Mx;		/**< [N*m] moment about nominal x axis */
+	float My;		/**< [N*m] moment about nominal y axis */
+	float Mz;		/**< [N*m] moment about nominal z axis */
 }; 
 
 /**
