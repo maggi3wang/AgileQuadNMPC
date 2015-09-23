@@ -89,7 +89,7 @@
 #define GRAV 	9.81f
 
 // TODO remove these later when I have an estimator for m and inertia
-#define MASS_TEMP 2.0f
+#define MASS_TEMP 0.9943f
 #define XY_INERTIA_TEMP 0.007f
 #define Z_INERTIA_TEMP 0.014f
 
