@@ -132,3 +132,19 @@
  * @min 0.0
  */
 #define TRAJ_PARAMS_FREEFALL_THRESHOLD 1.0f
+
+/**
+ * Conversion from thrust force to throttle
+ *
+ * @unit 1/N
+ * @min 0.0
+ */
+#define TRAJ_PARAMS_THROTTLE_PER_THRUST 0.0599f
+
+/**
+ * Maximum Throttle Value
+ *
+ * @unit 1/N
+ * @min 0.0
+ */
+#define TRAJ_PARAMS_THROTTLE_MAX 1.0f

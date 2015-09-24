@@ -203,7 +203,7 @@ private:
     math::Vector<3> _F_nom;			/**< nominal force expressed in world coords */
     math::Vector<3> _F_cor;			/**< corrective force in world coords */
     float			_uT_nom;		/**< nominal thrust setpoint */
-    float			_thrust_sp;		/**< thrust setpoint */
+    float			_uT_sp;		/**< thrust setpoint */
     math::Vector<3> _M_nom;			/**< nominal moment expressed in body coords */
     math::Vector<3> _M_cor;			/**< corrective moment expressed in body coords */
     math::Vector<3> _M_sp;			/**< moment setpoint in body coords */
@@ -435,7 +435,7 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     _F_nom.zero();
     _F_cor.zero();
     _uT_nom = 0.0f;
-    _thrust_sp = 0.0f;
+    _uT_sp = 0.0f;
     _M_nom.zero();
     _M_cor.zero();
     _M_sp.zero();
@@ -574,9 +574,9 @@ MulticopterTrajectoryControl::reset_pos_nom()
 		_reset_pos_nom = false;
 		/* shift position setpoint to make attitude setpoint continuous */
 		_pos_nom(0) = _pos(0) + (_vel(0) - _vel_nom(0) - 
-				_R_N2W(0,2) * _thrust_sp / _gains.vel(0)) / _gains.pos(0);
+				_R_N2W(0,2) * _uT_sp / _gains.vel(0)) / _gains.pos(0);
 		_pos_nom(1) = _pos(1) + (_vel(1) - _vel_nom(1) - 
-				_R_N2W(0,1) * _thrust_sp / _gains.vel(1)) / _gains.pos(0);
+				_R_N2W(0,1) * _uT_sp / _gains.vel(1)) / _gains.pos(0);
 		mavlink_log_info(_mavlink_fd, "[mtc] reset pos sp: %.2f, %.2f", (double)_pos_nom(0), (double)_pos_nom(1));
 	}
 }
@@ -756,7 +756,6 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_time
 	math::Vector<3> x_nom;	x_nom.zero();	/**< nominal body x-axis */
 	math::Vector<3> y_nom;	y_nom.zero();	/**< nominal body x-axis */
 	math::Vector<3> z_nom;	z_nom.zero();	/**< nominal body x-axis */
-	//~ float uT_nom = 0.0f;	/**< nominal first input: thrust */
 	float uT1_nom = 0.0f;	/**< 1st deriv of nominal thrust input */
 	float uT2_nom = 0.0f;	/**< 2nd deriv of nominal thrust input */
     math::Vector<3> h_Omega; 	h_Omega.zero();
@@ -877,7 +876,7 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 	math::Vector<3> Omg_des;	Omg_des.zero();
 	math::Vector<3> h_Omega;	h_Omega.zero();
 	force_orientation_mapping(R_D2W, x_des, y_des, z_des, 
-			_thrust_sp, uT1_des, Omg_des, h_Omega, F_des, _psi_nom, _psi1_nom);
+			_uT_sp, uT1_des, Omg_des, h_Omega, F_des, _psi_nom, _psi1_nom);
 	// uT_des is the first input value
 	// double check the calculation of uT1_des. F_cor doesn't affect?
 	
@@ -904,7 +903,7 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 	_att_sp.pitch_body = eul_des(1);
 	_att_sp.yaw_body = eul_des(2);
 	_att_sp.R_valid = false;
-	_att_sp.thrust = _thrust_sp;
+	_att_sp.thrust = _uT_sp;
 	_att_sp.q_d_valid = false;
 	_att_sp.q_e_valid = false;
 	
@@ -1282,6 +1281,14 @@ MulticopterTrajectoryControl::task_main()
 			 */
 			trajectory_feedback_controller();
 			_att_control = _M_sp;
+			
+			/**
+			 * map thrust to throttle and apply safety
+			 */
+			float throttle = _uT_sp*TRAJ_PARAMS_THROTTLE_PER_THRUST;
+			if (throttle > TRAJ_PARAMS_THROTTLE_MAX){
+				throttle = TRAJ_PARAMS_THROTTLE_MAX;
+			}
 			 
 			/**
 			 * Publish topics
@@ -1303,9 +1310,9 @@ MulticopterTrajectoryControl::task_main()
 			_traj_nom.theta = eul_nom(1);
 			_traj_nom.psi = _psi_nom;
 			_traj_nom.thrust = _uT_nom;
-			_traj_nom.Mx = _M_sp(0);
-			_traj_nom.My = _M_sp(1);
-			_traj_nom.Mz = _M_sp(2);
+			_traj_nom.Mx = _M_nom(0);
+			_traj_nom.My = _M_nom(1);
+			_traj_nom.Mz = _M_nom(2);
 			 
 			/* publish nominal trajectory values */
 			if (_traj_nom_pub > 0) {
@@ -1347,7 +1354,7 @@ MulticopterTrajectoryControl::task_main()
 			_actuators.control[0] = (isfinite(_att_control(0))) ? _att_control(0) : 0.0f;
 			_actuators.control[1] = (isfinite(_att_control(1))) ? _att_control(1) : 0.0f;
 			_actuators.control[2] = (isfinite(_att_control(2))) ? _att_control(2) : 0.0f;
-			_actuators.control[3] = (isfinite(_thrust_sp)) ? _thrust_sp : 0.0f;
+			_actuators.control[3] = (isfinite(throttle)) ? throttle : 0.0f;
 			_actuators.timestamp = hrt_absolute_time();
 
 			if (_control_mode.flag_control_trajectory_enabled) {
