@@ -90,8 +90,8 @@
 
 // TODO remove these later when I have an estimator for m and inertia
 #define MASS_TEMP 0.9943f
-#define XY_INERTIA_TEMP 0.007f
-#define Z_INERTIA_TEMP 0.014f
+#define XY_INERTIA_TEMP 0.0018f
+#define Z_INERTIA_TEMP 0.0037f
 
 /**
  * Multicopter position control app start / stop handling function
@@ -932,9 +932,10 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 		ang_err = ang_err_neg;
 	}
 	
-	/* fill attitude setpoint */
+	/* rotate back to px4 body and fill attitude setpoint */
 	_att_sp.timestamp = hrt_absolute_time();
-	math::Vector<3> eul_des = R_D2W.to_euler();
+	math::Matrix<3, 3> R_DP2W = R_D2W*_R_B2P.transpose();
+	math::Vector<3> eul_des = R_DP2W.to_euler();
 	_att_sp.roll_body = eul_des(0);
 	_att_sp.pitch_body = eul_des(1);
 	_att_sp.yaw_body = eul_des(2);
@@ -951,7 +952,7 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 		_att_sp_pub = orb_advertise(ORB_ID(vehicle_attitude_setpoint), &_att_sp);
 	}
 	
-	/* fill attitude rates setpoint */
+	/* rotate back to px4 body and fill attitude rates setpoint */
 	_att_rates_sp.timestamp = hrt_absolute_time();
 	math::Matrix<3,3> T_omg2dot;	T_omg2dot.zero();	// transformation matrix from angular velocity in body coords to euler rates
 	T_omg2dot(0,0) = (float)cos((double)eul_des(1));
@@ -961,7 +962,7 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 	T_omg2dot(1,2) = -(float)(cos((double)eul_des(1))*tan((double)eul_des(1)));
 	T_omg2dot(2,0) = -(float)(sin((double)eul_des(1))/cos((double)eul_des(0)));
 	T_omg2dot(2,2) = (float)(cos((double)eul_des(1))/cos((double)eul_des(0)));
-	math::Vector<3> eul_rates_des = T_omg2dot*Omg_des;
+	math::Vector<3> eul_rates_des = T_omg2dot*(_R_B2P.transpose()*Omg_des);
 	_att_rates_sp.roll = eul_rates_des(0);
 	_att_rates_sp.pitch = eul_rates_des(1);
 	_att_rates_sp.yaw = eul_rates_des(2);
