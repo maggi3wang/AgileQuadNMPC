@@ -176,6 +176,7 @@ private:
 
 	bool _reset_pos_nom;
 	bool _reset_alt_nom;
+	bool _reset_psi_nom;
     bool _control_trajectory_started;
     
     //NOTE: ELIMINATE VARIABLES THAT ARE PASSED AROUND 
@@ -278,6 +279,11 @@ private:
 	 * Reset altitude setpoint to current altitude
 	 */
 	void		reset_alt_nom();
+	
+	/**
+	 * Reset yaw setpoint to current heading
+	 */
+	void		reset_psi_nom();
 
 	/**
 	 * Check if position setpoint is too far from current position and adjust it if needed.
@@ -375,7 +381,8 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 	_ref_timestamp(0),
 
 	_reset_pos_nom(true),
-	_reset_alt_nom(true)
+	_reset_alt_nom(true),
+	_reset_psi_nom(true)
 {
 	memset(&_att, 0, sizeof(_att));
 	memset(&_att_sp, 0, sizeof(_att_sp));
@@ -511,7 +518,7 @@ MulticopterTrajectoryControl::poll_subscriptions()
 		T_dot2omg(1, 2) = (float)sin((double) _att.roll);
 		T_dot2omg(2, 0) = (float)sin((double) _att.pitch);
 		T_dot2omg(2, 2) = (float)(cos((double) _att.roll)*cos((double) _att.pitch));
-		math::Vector Omg_px4 = T_dot2omg*ang_rates;
+		math::Vector<3> Omg_px4 = T_dot2omg*ang_rates;
 		_Omg_body = _R_B2P.transposed()*Omg_px4;
 	}
 
@@ -598,6 +605,16 @@ MulticopterTrajectoryControl::reset_alt_nom()
 		_reset_alt_nom = false;
 		_pos_nom(2) = _pos(2) + (_vel(2) - _vel_nom(2)) / _gains.pos(2);
 		mavlink_log_info(_mavlink_fd, "[mtc] reset alt sp: %.2f", -(double)_pos_nom(2));
+	}
+}
+
+void
+MulticopterTrajectoryControl::reset_psi_nom()
+{
+	if (_reset_psi_nom) {
+		_reset_psi_nom = false;
+		math::Vector<3> eul = _R_B2W.to_euler();
+		_psi1_nom = eul(2);
 	}
 }
 
@@ -710,7 +727,8 @@ MulticopterTrajectoryControl::force_orientation_mapping(
 		x_mid.zero();
 		
 		// nominal thrust input
-		uT_s = -dot(_z_body, F_s);
+		//~ uT_s = -dot(_z_body, F_s);
+		uT_s = F_s.length();
 		
 	    // nominal body axis in world frame
         z_s = -F_s.normalized();	// (eqn 15)
@@ -784,6 +802,7 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_time
         
         _reset_pos_nom = false;
         _reset_alt_nom = false;
+        _reset_psi_nom = false;
         
         hold_position();
         
@@ -854,6 +873,7 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_time
         
         _reset_pos_nom = false;
         _reset_alt_nom = false;
+        _reset_psi_nom = false;
         
         hold_position();
     }
@@ -972,6 +992,7 @@ MulticopterTrajectoryControl::hold_position()
     // reset position and alt if necessary
     reset_pos_nom();
     reset_alt_nom();
+    reset_psi_nom();
     
     // set position derivatives to zero
     _vel_nom.zero();
@@ -1012,6 +1033,7 @@ MulticopterTrajectoryControl::reset_trajectory()
     _control_trajectory_started = false;
     reset_alt_nom();
     reset_pos_nom();
+    reset_psi_nom();
         
 }
 
@@ -1187,6 +1209,7 @@ MulticopterTrajectoryControl::task_main()
 			/* reset setpoints, integrals and trajectory on arming */
 			_reset_pos_nom = true;
 			_reset_alt_nom = true;
+			_reset_psi_nom = true;
             reset_trajectory();
 		}
 
@@ -1227,6 +1250,7 @@ MulticopterTrajectoryControl::task_main()
 				// hold at current position instead of going
 				_reset_alt_nom = true;
 				_reset_pos_nom = true;
+				_reset_psi_nom = true;
 			
 				// Initial computations at start of trajectory
 				if (!_control_trajectory_started) {
@@ -1293,6 +1317,7 @@ MulticopterTrajectoryControl::task_main()
 				hold_position();
 				_reset_pos_nom = false;
 				_reset_alt_nom = false;
+				_reset_psi_nom = false;
 				
 			}
                   
@@ -1395,6 +1420,7 @@ MulticopterTrajectoryControl::task_main()
 			/* trajectory controller disabled, reset setpoints */
 			_reset_alt_nom = true;
 			_reset_pos_nom = true;
+			_reset_psi_nom = true;
 		}
         
         /* record state of trajectory control mode for next iteration */
