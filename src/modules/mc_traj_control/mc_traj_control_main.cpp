@@ -183,7 +183,9 @@ private:
     /* Actual properties and states */
     math::Vector<3> _pos;		/**< position of body frame origin in world coords */
     math::Vector<3> _vel;		/**< velocity of body frame origin wrt world, in world coords */
-    math::Matrix<3, 3> _R_B2W;	/**< rotation matrix from body to world coords */
+    math::Matrix<3, 3> _R_B2W;	/**< rotation matrix from body to world coords (axes aligned with quad arms)*/
+    math::Matrix<3, 3> _R_P2W;	/**< rotation matrix from PX4 body frame to world coords (axes bisect quad arms)*/
+    math::Matrix<3, 3> _R_B2P;	/**< rotation matrix from body frame to PX4 body frame (const)*/
     math::Vector<3> _x_body;	/**< x-axis of body frame in world coords */
     math::Vector<3> _y_body;	/**< x-axis of body frame in world coords */
     math::Vector<3> _z_body;	/**< x-axis of body frame in world coords */
@@ -417,9 +419,15 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 	_pos.zero();
     _vel.zero();
     _R_B2W.identity();
+    _R_P2W.identity();
     _x_body.zero();	_x_body(0) = 1.0f;
     _y_body.zero();	_y_body(1) = 1.0f;
     _z_body.zero(); _z_body(2) = 1.0f;
+    _R_B2P.identity();
+    _R_B2P(0,0) = (float)cos(M_PI_4);
+    _R_B2P(0,1) = (float)sin(M_PI_4);
+    _R_B2P(1,0) = -(float)sin(M_PI_4);
+    _R_B2P(1,1) = (float)cos(M_PI_4);
     _Omg_body.zero();
 
 	_pos_nom.zero();
@@ -483,8 +491,9 @@ MulticopterTrajectoryControl::poll_subscriptions()
 	if (updated) {
 		orb_copy(ORB_ID(vehicle_attitude), _att_sub, &_att);
 		
-		// access current body rotation
-		_R_B2W.set(_att.R);
+		// access current body rotation and account for px4 angular offset from body frame
+		_R_P2W.set(_att.R);	// PX4 body frame to world
+		_R_B2W = _R_P2W*_R_B2P;	// body frame to world accounting for px4 body frame
 		for (int i = 0; i < 3; i++) {
 			_x_body(i) = _R_B2W(i,0);
 			_y_body(i) = _R_B2W(i,1);
@@ -502,7 +511,8 @@ MulticopterTrajectoryControl::poll_subscriptions()
 		T_dot2omg(1, 2) = (float)sin((double) _att.roll);
 		T_dot2omg(2, 0) = (float)sin((double) _att.pitch);
 		T_dot2omg(2, 2) = (float)(cos((double) _att.roll)*cos((double) _att.pitch));
-		_Omg_body = T_dot2omg*ang_rates;
+		math::Vector Omg_px4 = T_dot2omg*ang_rates;
+		_Omg_body = _R_B2P.transposed()*Omg_px4;
 	}
 
 	orb_check(_control_mode_sub, &updated);
@@ -772,6 +782,9 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_time
         _pos_nom(2) = poly_eval(_z_coefs.at(0), 0.0f);
         _psi_nom = poly_eval(_yaw_coefs.at(0), 0.0f);
         
+        _reset_pos_nom = false;
+        _reset_alt_nom = false;
+        
         hold_position();
         
     } else if (cur_spline_t > 0 && cur_spline_t < spline_term_t) {
@@ -838,6 +851,9 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_time
         _pos_nom(1) = poly_eval(_y_coefs.at(_y_coefs.size()-1), poly_term_t);
         _pos_nom(2) = poly_eval(_z_coefs.at(_z_coefs.size()-1), poly_term_t);
         _psi_nom = poly_eval(_yaw_coefs.at(_yaw_coefs.size()-1), poly_term_t);
+        
+        _reset_pos_nom = false;
+        _reset_alt_nom = false;
         
         hold_position();
     }
@@ -953,6 +969,9 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 void
 MulticopterTrajectoryControl::hold_position()
 {
+    // reset position and alt if necessary
+    reset_pos_nom();
+    reset_alt_nom();
     
     // set position derivatives to zero
     _vel_nom.zero();
@@ -1168,7 +1187,7 @@ MulticopterTrajectoryControl::task_main()
 			/* reset setpoints, integrals and trajectory on arming */
 			_reset_pos_nom = true;
 			_reset_alt_nom = true;
-            		reset_trajectory();
+            reset_trajectory();
 		}
 
 		was_armed = _control_mode.flag_armed;
@@ -1272,15 +1291,18 @@ MulticopterTrajectoryControl::task_main()
 			} else {
 				// perform position hold
 				hold_position();
+				_reset_pos_nom = false;
+				_reset_alt_nom = false;
 				
 			}
                   
 			
 			/**
 			 * Apply feedback control to nominal trajectory
+			 * and rotate moments back to px4 body frame
 			 */
 			trajectory_feedback_controller();
-			_att_control = _M_sp;
+			_att_control = _R_B2P*_M_sp;
 			
 			/**
 			 * map thrust to throttle and apply safety
