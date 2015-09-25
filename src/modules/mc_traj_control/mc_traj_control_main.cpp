@@ -614,7 +614,7 @@ MulticopterTrajectoryControl::reset_psi_nom()
 	if (_reset_psi_nom) {
 		_reset_psi_nom = false;
 		math::Vector<3> eul = _R_B2W.to_euler();
-		_psi1_nom = eul(2);
+		_psi_nom = eul(2);
 	}
 }
 
@@ -1217,19 +1217,19 @@ MulticopterTrajectoryControl::task_main()
 
 		update_ref();
 		
-		    /* reset trajectory start time */
-            if (!_control_mode.flag_control_trajectory_enabled &&
-                _control_trajectory_started){
-            
-                _control_trajectory_started = false;
-            }
-            
-            /* reset trajectory data when switched out of traj control */
-            if (!_control_mode.flag_control_trajectory_enabled &&
-                was_flag_control_trajectory_enabled){
-            
-                reset_trajectory();
-            }
+		/* reset trajectory start time */
+		if (!_control_mode.flag_control_trajectory_enabled &&
+			_control_trajectory_started){
+		
+			_control_trajectory_started = false;
+		}
+		
+		/* reset trajectory data when switched out of traj control */
+		if (!_control_mode.flag_control_trajectory_enabled &&
+			was_flag_control_trajectory_enabled){
+		
+			reset_trajectory();
+		}
         
 
 		if (_control_mode.flag_control_trajectory_enabled) {
@@ -1315,9 +1315,6 @@ MulticopterTrajectoryControl::task_main()
 			} else {
 				// perform position hold
 				hold_position();
-				_reset_pos_nom = false;
-				_reset_alt_nom = false;
-				_reset_psi_nom = false;
 				
 			}
                   
