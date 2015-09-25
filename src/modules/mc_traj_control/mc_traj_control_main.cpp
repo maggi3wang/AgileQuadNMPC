@@ -934,7 +934,7 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 	
 	/* rotate back to px4 body and fill attitude setpoint */
 	_att_sp.timestamp = hrt_absolute_time();
-	math::Matrix<3, 3> R_DP2W = R_D2W*_R_B2P.transpose();
+	math::Matrix<3, 3> R_DP2W = R_D2W*_R_B2P.transposed();
 	math::Vector<3> eul_des = R_DP2W.to_euler();
 	_att_sp.roll_body = eul_des(0);
 	_att_sp.pitch_body = eul_des(1);
@@ -962,7 +962,7 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 	T_omg2dot(1,2) = -(float)(cos((double)eul_des(1))*tan((double)eul_des(1)));
 	T_omg2dot(2,0) = -(float)(sin((double)eul_des(1))/cos((double)eul_des(0)));
 	T_omg2dot(2,2) = (float)(cos((double)eul_des(1))/cos((double)eul_des(0)));
-	math::Vector<3> eul_rates_des = T_omg2dot*(_R_B2P.transpose()*Omg_des);
+	math::Vector<3> eul_rates_des = T_omg2dot*(_R_B2P.transposed()*Omg_des);
 	_att_rates_sp.roll = eul_rates_des(0);
 	_att_rates_sp.pitch = eul_rates_des(1);
 	_att_rates_sp.yaw = eul_rates_des(2);

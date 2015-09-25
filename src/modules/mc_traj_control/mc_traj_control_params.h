@@ -14,14 +14,14 @@
  *
  * @min 0.0
  */
-#define TRAJ_GAINS_XY_POS 0.25f
+#define TRAJ_GAINS_XY_POS 2.0f
 
 /**
  * Proportional gain for vertical position error
  *
  * @min 0.0
  */
-#define TRAJ_GAINS_Z_POS 0.25f
+#define TRAJ_GAINS_Z_POS 1.0f
 
 /**
  * Proportional gain for horizontal velocity error
