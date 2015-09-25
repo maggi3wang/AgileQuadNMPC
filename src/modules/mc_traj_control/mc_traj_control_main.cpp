@@ -185,8 +185,8 @@ private:
     math::Vector<3> _pos;		/**< position of body frame origin in world coords */
     math::Vector<3> _vel;		/**< velocity of body frame origin wrt world, in world coords */
     math::Matrix<3, 3> _R_B2W;	/**< rotation matrix from body to world coords (axes aligned with quad arms)*/
-    math::Matrix<3, 3> _R_P2W;	/**< rotation matrix from PX4 body frame to world coords (axes bisect quad arms)*/
-    math::Matrix<3, 3> _R_B2P;	/**< rotation matrix from body frame to PX4 body frame (const)*/
+    //~ math::Matrix<3, 3> _R_P2W;	/**< rotation matrix from PX4 body frame to world coords (axes bisect quad arms)*/
+    //~ math::Matrix<3, 3> _R_B2P;	/**< rotation matrix from body frame to PX4 body frame (const)*/
     math::Vector<3> _x_body;	/**< x-axis of body frame in world coords */
     math::Vector<3> _y_body;	/**< x-axis of body frame in world coords */
     math::Vector<3> _z_body;	/**< x-axis of body frame in world coords */
@@ -426,16 +426,16 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 	_pos.zero();
     _vel.zero();
     _R_B2W.identity();
-    _R_P2W.identity();
     _x_body.zero();	_x_body(0) = 1.0f;
     _y_body.zero();	_y_body(1) = 1.0f;
     _z_body.zero(); _z_body(2) = 1.0f;
-    _R_B2P.identity();
     _Omg_body.zero();
-    _R_B2P(0,0) = (float)cos(M_PI_4);
-    _R_B2P(0,1) = (float)sin(M_PI_4);
-    _R_B2P(1,0) = -(float)sin(M_PI_4);
-    _R_B2P(1,1) = (float)cos(M_PI_4);
+    //~ _R_P2W.identity();
+    //~ _R_B2P.identity();
+    //~ _R_B2P(0,0) = (float)cos(M_PI_4);
+    //~ _R_B2P(0,1) = (float)sin(M_PI_4);
+    //~ _R_B2P(1,0) = -(float)sin(M_PI_4);
+    //~ _R_B2P(1,1) = (float)cos(M_PI_4);
 
 	_pos_nom.zero();
 	_vel_nom.zero();
@@ -499,8 +499,9 @@ MulticopterTrajectoryControl::poll_subscriptions()
 		orb_copy(ORB_ID(vehicle_attitude), _att_sub, &_att);
 		
 		// access current body rotation and account for px4 angular offset from body frame
-		_R_P2W.set(_att.R);	// PX4 body frame to world
-		_R_B2W = _R_P2W*_R_B2P;	// body frame to world accounting for px4 body frame
+		//~ _R_P2W.set(_att.R);	// PX4 body frame to world
+		//~ _R_B2W = _R_P2W*_R_B2P;	// body frame to world accounting for px4 body frame
+		_R_B2W.set(_att.R);
 		for (int i = 0; i < 3; i++) {
 			_x_body(i) = _R_B2W(i,0);
 			_y_body(i) = _R_B2W(i,1);
@@ -518,8 +519,9 @@ MulticopterTrajectoryControl::poll_subscriptions()
 		T_dot2omg(1, 2) = (float)sin((double) _att.roll);
 		T_dot2omg(2, 0) = (float)sin((double) _att.pitch);
 		T_dot2omg(2, 2) = (float)(cos((double) _att.roll)*cos((double) _att.pitch));
-		math::Vector<3> Omg_px4 = T_dot2omg*ang_rates;
-		_Omg_body = _R_B2P.transposed()*Omg_px4;
+		//~ math::Vector<3> Omg_px4 = T_dot2omg*ang_rates;
+		//~ _Omg_body = _R_B2P.transposed()*Omg_px4;
+		_Omg_body = T_dot2omg*ang_rates;
 	}
 
 	orb_check(_control_mode_sub, &updated);
@@ -934,8 +936,9 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 	
 	/* rotate back to px4 body and fill attitude setpoint */
 	_att_sp.timestamp = hrt_absolute_time();
-	math::Matrix<3, 3> R_DP2W = R_D2W*_R_B2P.transposed();
-	math::Vector<3> eul_des = R_DP2W.to_euler();
+	//~ math::Matrix<3, 3> R_DP2W = R_D2W*_R_B2P.transposed();
+	//~ math::Vector<3> eul_des = R_DP2W.to_euler();
+	math::Vector<3> eul_des = R_D2W.to_euler();
 	_att_sp.roll_body = eul_des(0);
 	_att_sp.pitch_body = eul_des(1);
 	_att_sp.yaw_body = eul_des(2);
@@ -962,7 +965,8 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 	T_omg2dot(1,2) = -(float)(cos((double)eul_des(1))*tan((double)eul_des(1)));
 	T_omg2dot(2,0) = -(float)(sin((double)eul_des(1))/cos((double)eul_des(0)));
 	T_omg2dot(2,2) = (float)(cos((double)eul_des(1))/cos((double)eul_des(0)));
-	math::Vector<3> eul_rates_des = T_omg2dot*(_R_B2P.transposed()*Omg_des);
+	//~ math::Vector<3> eul_rates_des = T_omg2dot*(_R_B2P.transposed()*Omg_des);
+	math::Vector<3> eul_rates_des = T_omg2dot*Omg_des;
 	_att_rates_sp.roll = eul_rates_des(0);
 	_att_rates_sp.pitch = eul_rates_des(1);
 	_att_rates_sp.yaw = eul_rates_des(2);
@@ -1038,11 +1042,15 @@ MulticopterTrajectoryControl::reset_trajectory()
 	_pos.zero();
     _vel.zero();
     _R_B2W.identity();
-    _R_P2W.identity();
     _x_body.zero();	_x_body(0) = 1.0f;
     _y_body.zero();	_y_body(1) = 1.0f;
     _z_body.zero(); _z_body(2) = 1.0f;
-    _R_B2P.identity();
+    //~ _R_P2W.identity();
+    //~ _R_B2P.identity();
+    //~ _R_B2P(0,0) = (float)cos(M_PI_4);
+    //~ _R_B2P(0,1) = (float)sin(M_PI_4);
+    //~ _R_B2P(1,0) = -(float)sin(M_PI_4);
+    //~ _R_B2P(1,1) = (float)cos(M_PI_4);
     _Omg_body.zero();
 	_pos_nom.zero();
 	_vel_nom.zero();
@@ -1350,7 +1358,8 @@ MulticopterTrajectoryControl::task_main()
 			 * and rotate moments back to px4 body frame
 			 */
 			trajectory_feedback_controller();
-			_att_control = _R_B2P*_M_sp;
+			//~ _att_control = _R_B2P*_M_sp;
+			_att_control = _M_sp;
 			
 			/**
 			 * map thrust to throttle and apply safety
