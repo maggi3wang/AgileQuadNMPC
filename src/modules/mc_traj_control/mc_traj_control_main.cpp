@@ -431,11 +431,11 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     _y_body.zero();	_y_body(1) = 1.0f;
     _z_body.zero(); _z_body(2) = 1.0f;
     _R_B2P.identity();
+    _Omg_body.zero();
     _R_B2P(0,0) = (float)cos(M_PI_4);
     _R_B2P(0,1) = (float)sin(M_PI_4);
     _R_B2P(1,0) = -(float)sin(M_PI_4);
     _R_B2P(1,1) = (float)cos(M_PI_4);
-    _Omg_body.zero();
 
 	_pos_nom.zero();
 	_vel_nom.zero();
@@ -1032,9 +1032,36 @@ MulticopterTrajectoryControl::reset_trajectory()
         
     memset(&_traj_spline, 0, sizeof(_traj_spline));
     _control_trajectory_started = false;
-    reset_alt_nom();
-    reset_pos_nom();
-    reset_psi_nom();
+	_reset_pos_nom = true;
+	_reset_alt_nom = true;
+	_reset_psi_nom = true;
+	_pos.zero();
+    _vel.zero();
+    _R_B2W.identity();
+    _R_P2W.identity();
+    _x_body.zero();	_x_body(0) = 1.0f;
+    _y_body.zero();	_y_body(1) = 1.0f;
+    _z_body.zero(); _z_body(2) = 1.0f;
+    _R_B2P.identity();
+    _Omg_body.zero();
+	_pos_nom.zero();
+	_vel_nom.zero();
+    _acc_nom.zero();
+    _jerk_nom.zero();
+    _snap_nom.zero();
+    _psi_nom = 0.0f;
+    _psi1_nom = 0.0f;
+    _psi2_nom = 0.0f;
+    _R_N2W.identity();
+    _Omg_nom.zero();
+    _F_nom.zero();
+    _F_cor.zero();
+    _uT_nom = 0.0f;
+    _uT_sp = 0.0f;
+    _M_nom.zero();
+    _M_cor.zero();
+    _M_sp.zero();
+    _att_control.zero();
         
 }
 
@@ -1208,9 +1235,7 @@ MulticopterTrajectoryControl::task_main()
 
 		if (_control_mode.flag_armed && !was_armed) {
 			/* reset setpoints, integrals and trajectory on arming */
-			_reset_pos_nom = true;
-			_reset_alt_nom = true;
-			_reset_psi_nom = true;
+
             reset_trajectory();
 		}
 
@@ -1228,7 +1253,7 @@ MulticopterTrajectoryControl::task_main()
 		/* reset trajectory data when switched out of traj control */
 		if (!_control_mode.flag_control_trajectory_enabled &&
 			was_flag_control_trajectory_enabled){
-		
+	
 			reset_trajectory();
 		}
         
