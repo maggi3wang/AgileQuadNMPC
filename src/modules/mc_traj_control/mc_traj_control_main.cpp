@@ -923,9 +923,9 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 	// double check the calculation of uT1_des. F_cor doesn't affect?
 	
 	/* rotational corrective input */
-	printf("DEBUG: _att.R_valid = %d\n", _att.R_valid);
+	//~ printf("DEBUG: _att.R_valid = %d\n", _att.R_valid);
 	ang_err = vee_map((_R_B2W.transposed())*R_D2W - (R_D2W.transposed())*_R_B2W)*0.5f;
-	printf("DEBUG: ang err %d, %d, %d\n", (int)(ang_err(0)*1000.0f), (int)(ang_err(1)*1000.0f), (int)(ang_err(2)*1000.0f));
+	//~ printf("DEBUG: ang err %d, %d, %d\n", (int)(ang_err(0)*1000.0f), (int)(ang_err(1)*1000.0f), (int)(ang_err(2)*1000.0f));
 	// Check valid orientation nearest to current (Mellinger & Kumar section IV)
 	//~ math::Matrix<3,3> R_D2W_neg = R_D2W;
 	//~ math::Vector<3> x_des_neg = -x_des;
