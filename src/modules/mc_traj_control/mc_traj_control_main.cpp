@@ -927,8 +927,8 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 	math::Matrix<3,3> R_D2W_neg = R_D2W;
 	math::Vector<3> x_des_neg = -x_des;
 	math::Vector<3> y_des_neg = -y_des;
-	set_column(R_D2W, 0, x_des_neg);
-	set_column(R_D2W, 1, y_des_neg);
+	set_column(R_D2W_neg, 0, x_des_neg);
+	set_column(R_D2W_neg, 1, y_des_neg);
 	math::Vector<3> ang_err_neg = vee_map((_R_B2W.transposed())*R_D2W_neg - (R_D2W_neg.transposed())*_R_B2W)*0.5f;
 	if (ang_err_neg.length() < ang_err.length()) {
 		R_D2W = R_D2W_neg;
