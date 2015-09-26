@@ -732,8 +732,8 @@ MulticopterTrajectoryControl::force_orientation_mapping(
 		y_mid.zero();
 		
 		// nominal thrust input
-		//~ uT_s = -dot(_z_body, F_s);
-		uT_s = F_s.length();
+		uT_s = -dot(_z_body, F_s);
+		//~ uT_s = F_s.length();
 		
 	    // nominal body axis in world frame
         z_s = -F_s.normalized();	// (eqn 15)
@@ -935,7 +935,10 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 		x_des = -x_des;
 		y_des = -y_des;
 		ang_err = ang_err_neg;
+		printf("DEBUG: using neg\n");
 	}
+	
+	printf("DEBUG: ang err %d, %d, %d\n", (int)(ang_err(0)*1000.0f), (int)(ang_err(1)*1000.0f), (int)(ang_err(2)*1000.0f));
 	
 	/* fill attitude setpoint */
 	_att_sp.timestamp = hrt_absolute_time();
