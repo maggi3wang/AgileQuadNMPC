@@ -897,6 +897,7 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 	math::Vector<3> ang_err;
 	ang_err.zero();
 	math::Vector<3> omg_err;
+	omg_err.zero();
 	
 	/* translational corrective input */
 	pos_err = _pos_nom - _pos;
@@ -922,23 +923,24 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 	// double check the calculation of uT1_des. F_cor doesn't affect?
 	
 	/* rotational corrective input */
+	printf("DEBUG: _att.R_valid = %d\n", _att.R_valid);
 	ang_err = vee_map((_R_B2W.transposed())*R_D2W - (R_D2W.transposed())*_R_B2W)*0.5f;
-	// Check valid orientation nearest to current (Mellinger & Kumar section IV)
-	math::Matrix<3,3> R_D2W_neg = R_D2W;
-	math::Vector<3> x_des_neg = -x_des;
-	math::Vector<3> y_des_neg = -y_des;
-	set_column(R_D2W_neg, 0, x_des_neg);
-	set_column(R_D2W_neg, 1, y_des_neg);
-	math::Vector<3> ang_err_neg = vee_map((_R_B2W.transposed())*R_D2W_neg - (R_D2W_neg.transposed())*_R_B2W)*0.5f;
-	if (ang_err_neg.length() < ang_err.length()) {
-		R_D2W = R_D2W_neg;
-		x_des = -x_des;
-		y_des = -y_des;
-		ang_err = ang_err_neg;
-		printf("DEBUG: using neg\n");
-	}
-	
 	printf("DEBUG: ang err %d, %d, %d\n", (int)(ang_err(0)*1000.0f), (int)(ang_err(1)*1000.0f), (int)(ang_err(2)*1000.0f));
+	// Check valid orientation nearest to current (Mellinger & Kumar section IV)
+	//~ math::Matrix<3,3> R_D2W_neg = R_D2W;
+	//~ math::Vector<3> x_des_neg = -x_des;
+	//~ math::Vector<3> y_des_neg = -y_des;
+	//~ set_column(R_D2W_neg, 0, x_des_neg);
+	//~ set_column(R_D2W_neg, 1, y_des_neg);
+	//~ math::Vector<3> ang_err_neg = vee_map((_R_B2W.transposed())*R_D2W_neg - (R_D2W_neg.transposed())*_R_B2W)*0.5f;
+	//~ printf("DEBUG: ang err_neg %d, %d, %d\n", (int)(ang_err_neg(0)*1000.0f), (int)(ang_err_neg(1)*1000.0f), (int)(ang_err_neg(2)*1000.0f));
+	//~ if (ang_err_neg.length() < ang_err.length()) {
+		//~ R_D2W = R_D2W_neg;
+		//~ x_des = -x_des;
+		//~ y_des = -y_des;
+		//~ ang_err = ang_err_neg;
+		//~ printf("DEBUG: using neg\n");
+	//~ }
 	
 	/* fill attitude setpoint */
 	_att_sp.timestamp = hrt_absolute_time();
