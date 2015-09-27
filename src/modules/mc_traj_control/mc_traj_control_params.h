@@ -14,49 +14,55 @@
  *
  * @min 0.0
  */
-#define TRAJ_GAINS_XY_POS 2.0f
+//~ #define TRAJ_GAINS_XY_POS 2.0f
+#define TRAJ_GAINS_XY_POS 0.0f
 
 /**
  * Proportional gain for vertical position error
  *
  * @min 0.0
  */
-#define TRAJ_GAINS_Z_POS 1.0f
+//~ #define TRAJ_GAINS_Z_POS 1.0f
+#define TRAJ_GAINS_Z_POS 0.0f
 
 /**
  * Proportional gain for horizontal velocity error
  *
  * @min 0.0
  */
-#define TRAJ_GAINS_XY_VEL 1.0f
+//~ #define TRAJ_GAINS_XY_VEL 1.0f
+#define TRAJ_GAINS_XY_VEL 0.0f
 
 /**
  * Proportional gain for vertical velocity error
  *
  * @min 0.0
  */
-#define TRAJ_GAINS_Z_VEL 1.0f
+//~ #define TRAJ_GAINS_Z_VEL 1.0f
+#define TRAJ_GAINS_Z_VEL 0.0f
 
 /**
  * Proportional gain for roll, pitch angular error
  *
  * @min 0.0
  */
-#define TRAJ_GAINS_RP_ANG 0.1f
-
-/**
- * Proportional gain for yaw angular error
- *
- * @min 0.0
- */
-#define TRAJ_GAINS_YAW_ANG 0.1f
+#define TRAJ_GAINS_RP_ANG 0.0f
 
 /**
  * Proportional gain for roll, pitch angular velocity error
  *
  * @min 0.0
  */
-#define TRAJ_GAINS_RP_OMG 0.1f
+#define TRAJ_GAINS_RP_OMG 0.5f
+
+/**
+ * Proportional gain for yaw angular error
+ *
+ * @min 0.0
+ */
+//~ #define TRAJ_GAINS_YAW_ANG 1.0f
+#define TRAJ_GAINS_YAW_ANG 0.0f
+
 
 /**
  * Proportional gain for yaw angular velocity error
@@ -139,7 +145,8 @@
  * @unit 1/N
  * @min 0.0
  */
-#define TRAJ_PARAMS_THROTTLE_PER_THRUST 0.0599f
+//~ #define TRAJ_PARAMS_THROTTLE_PER_THRUST 0.0599f
+#define TRAJ_PARAMS_THROTTLE_PER_THRUST 0.06f
 
 /**
  * Maximum Throttle Value

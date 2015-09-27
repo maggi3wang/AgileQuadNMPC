@@ -88,6 +88,8 @@
 
 #define GRAV 	9.81f
 
+#define ZERO_GAIN_THRESHOLD 0.000001f
+
 // TODO remove these later when I have an estimator for m and inertia
 #define MASS_TEMP 0.9943f
 #define XY_INERTIA_TEMP 0.0018f
@@ -399,10 +401,10 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 	memset(&_ref_pos, 0, sizeof(_ref_pos));
 	
 	/* retrieve control gains */
-	_gains.pos(0) = TRAJ_GAINS_XY_POS;
-	_gains.pos(1) = TRAJ_GAINS_XY_POS;
-	_gains.pos(2) = TRAJ_GAINS_Z_POS;
-	_gains.vel(0) = TRAJ_GAINS_XY_VEL;
+    _gains.pos(0) = TRAJ_GAINS_XY_POS;
+    _gains.pos(1) = TRAJ_GAINS_XY_POS;
+    _gains.pos(2) = TRAJ_GAINS_Z_POS;
+    _gains.vel(0) = TRAJ_GAINS_XY_VEL;
 	_gains.vel(1) = TRAJ_GAINS_XY_VEL;
 	_gains.vel(2) = TRAJ_GAINS_Z_VEL;
 	_gains.ang(0) = TRAJ_GAINS_RP_ANG;
@@ -419,7 +421,11 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 	_safe_params.vel_max(0) = TRAJ_PARAMS_XY_VEL_MAX;
 	_safe_params.vel_max(1) = TRAJ_PARAMS_XY_VEL_MAX;
 	_safe_params.vel_max(2) = TRAJ_PARAMS_Z_VEL_MAX;
-	_safe_params.sp_offs_max = _safe_params.vel_max.edivide(_gains.pos) * 2.0f;
+	if (_gains.pos.length() > ZERO_GAIN_THRESHOLD) {
+		_safe_params.sp_offs_max = _safe_params.vel_max.edivide(_gains.pos) * 2.0f;
+	} else {
+		_safe_params.sp_offs_max = _safe_params.vel_max*1.0f;
+	}
 	_safe_params.gim_lock = TRAJ_PARAMS_GIMBAL_LOCK;
 	_safe_params.freefall_thresh = TRAJ_PARAMS_FREEFALL_THRESHOLD;
 	
@@ -594,11 +600,16 @@ MulticopterTrajectoryControl::reset_pos_nom()
 {
 	if (_reset_pos_nom) {
 		_reset_pos_nom = false;
-		/* shift position setpoint to make attitude setpoint continuous */
-		_pos_nom(0) = _pos(0) + (_vel(0) - _vel_nom(0) - 
-				_R_N2W(0,2) * _uT_sp / _gains.vel(0)) / _gains.pos(0);
-		_pos_nom(1) = _pos(1) + (_vel(1) - _vel_nom(1) - 
-				_R_N2W(0,1) * _uT_sp / _gains.vel(1)) / _gains.pos(0);
+		if (_gains.pos.length() > ZERO_GAIN_THRESHOLD && _gains.vel.length() > ZERO_GAIN_THRESHOLD){
+			/* shift position setpoint to make attitude setpoint continuous */
+			_pos_nom(0) = _pos(0) + (_vel(0) - _vel_nom(0) - 
+					_R_N2W(0,2) * _uT_sp / _gains.vel(0)) / _gains.pos(0);
+			_pos_nom(1) = _pos(1) + (_vel(1) - _vel_nom(1) - 
+					_R_N2W(0,1) * _uT_sp / _gains.vel(1)) / _gains.pos(1);
+		} else {
+			_pos_nom(0) = _pos(0);
+			_pos_nom(1) = _pos(1);
+		}
 		mavlink_log_info(_mavlink_fd, "[mtc] reset pos sp: %.2f, %.2f", (double)_pos_nom(0), (double)_pos_nom(1));
 	}
 }
@@ -608,7 +619,11 @@ MulticopterTrajectoryControl::reset_alt_nom()
 {
 	if (_reset_alt_nom) {
 		_reset_alt_nom = false;
-		_pos_nom(2) = _pos(2) + (_vel(2) - _vel_nom(2)) / _gains.pos(2);
+		if (_gains.pos.length() > ZERO_GAIN_THRESHOLD) {
+			_pos_nom(2) = _pos(2) + (_vel(2) - _vel_nom(2)) / _gains.pos(2);
+		} else {
+			_pos_nom(2) = _pos(2);
+		}
 		mavlink_log_info(_mavlink_fd, "[mtc] reset alt sp: %.2f", -(double)_pos_nom(2));
 	}
 }
@@ -618,8 +633,7 @@ MulticopterTrajectoryControl::reset_psi_nom()
 {
 	if (_reset_psi_nom) {
 		_reset_psi_nom = false;
-		math::Vector<3> eul = _R_B2W.to_euler();
-		_psi_nom = eul(2);
+		_psi_nom = _att.yaw;
 	}
 }
 
@@ -717,6 +731,176 @@ MulticopterTrajectoryControl::set_column(math::Matrix<3, 3>& R, unsigned int col
 		R(i, col) = v(i);
 	}
 	
+}
+
+
+/* Added by Ross Allen */
+void
+MulticopterTrajectoryControl::reset_trajectory()
+{
+        
+    memset(&_traj_spline, 0, sizeof(_traj_spline));
+    _control_trajectory_started = false;
+	_reset_pos_nom = true;
+	_reset_alt_nom = true;
+	_reset_psi_nom = true;
+	_pos.zero();
+    _vel.zero();
+    _R_B2W.identity();
+    _x_body.zero();	_x_body(0) = 1.0f;
+    _y_body.zero();	_y_body(1) = 1.0f;
+    _z_body.zero(); _z_body(2) = 1.0f;
+    _Omg_body.zero();
+	_pos_nom.zero();
+	_vel_nom.zero();
+    _acc_nom.zero();
+    _jerk_nom.zero();
+    _snap_nom.zero();
+    _psi_nom = 0.0f;
+    _psi1_nom = 0.0f;
+    _psi2_nom = 0.0f;
+    _R_N2W.identity();
+    _Omg_nom.zero();
+    _F_nom.zero();
+    _F_cor.zero();
+    _uT_nom = 0.0f;
+    _uT_sp = 0.0f;
+    _M_nom.zero();
+    _M_cor.zero();
+    _M_sp.zero();
+    _att_control.zero();
+        
+}
+
+float
+MulticopterTrajectoryControl::poly_eval(const std::vector<float>& coefs, float t)
+{
+    
+    typedef std::vector<float>::size_type vecf_sz;
+    vecf_sz deg = coefs.size()-1;
+
+    
+    // initialize return value
+    float p = coefs.at(deg);
+    
+    for(vecf_sz i = deg-1; ; --i){
+        
+        // Calculate with Horner's Rule
+        p = p*t + coefs.at(i);
+        
+        // Check break condition.
+        // This clunky for a for loop but is necessary because vecf_sz
+        // in some form of unsigned int. If the condition is left as
+        // i >= 0, then the condition is always true
+        if (i == 0) break;
+    }
+
+    return p;
+}
+
+float
+MulticopterTrajectoryControl::poly_eval(const float coefs_arr[N_POLY_COEFS], float t)
+{
+
+    // degree of polynomial
+    unsigned deg = N_POLY_COEFS-1;
+    
+    // initialize return value
+    float p = coefs_arr[deg];
+    
+    for(unsigned i = deg-1; ; --i){
+        
+        // Calculate with Horner's Rule
+        p = p*t + coefs_arr[i];
+        
+        // Check break condition.
+        // This clunky for a for loop but is necessary because vecf_sz
+        // in some form of unsigned int. If the condition is left as
+        // i >= 0, then the condition is always true
+        if (i == 0) break;
+    }
+
+    return p;
+}
+
+/* Cumulative sum over vector with initial value */
+void
+MulticopterTrajectoryControl::vector_cum_sum(
+const std::vector<float>& vec, float initval, std::vector<float>& vecsum){
+    
+    vecsum = vec;   // overwrite anything currently in vecsum
+    vecsum.at(0) += initval;
+    std::partial_sum(vecsum.begin(), vecsum.end(), vecsum.begin());
+}
+
+/* Evaluate derivatives of a polynomial */
+void
+MulticopterTrajectoryControl::poly_deriv(
+const std::vector< std::vector<float> >& poly,
+std::vector< std::vector<float> >& deriv) {
+
+    
+    typedef std::vector<float>::size_type vecf_sz;
+    typedef std::vector< std::vector<float> >::size_type vecf2d_sz;
+
+    
+    vecf2d_sz numrows = poly.size();
+    deriv.resize(numrows);      // resize number rows
+
+    
+    for (vecf2d_sz row = 0; row != numrows; ++row) {
+        
+        vecf_sz numcols = poly.at(row).size();
+        deriv.at(row).resize(numcols);
+        
+        for (vecf_sz col = 0; col != numcols; ++col) {
+            
+            deriv.at(row).at(col) = ((float)col)*poly.at(row).at(col);
+        }
+        
+        
+        // remove first element
+        deriv.at(row).erase(deriv.at(row).begin());
+    }
+    
+}
+
+/* hold position */
+void
+MulticopterTrajectoryControl::hold_position()
+{
+    // reset position and alt if necessary
+    reset_pos_nom();
+    reset_alt_nom();
+    reset_psi_nom();
+    
+    // set position derivatives to zero
+    _vel_nom.zero();
+    _acc_nom.zero();
+    _jerk_nom.zero();
+    _snap_nom.zero();
+    _psi1_nom = 0.0f;
+    _psi2_nom = 0.0f;
+    
+    // Force to just couteract gravity
+    _F_nom.zero();
+    _F_nom(2) = -_mass*GRAV;
+    math::Vector<3> x_nom;	x_nom.zero();
+    math::Vector<3> y_nom;	y_nom.zero();
+    math::Vector<3> z_nom;	z_nom.zero();
+    float uT1_nom = 0.0f;
+    math::Vector<3> h_Omega; 	h_Omega.zero();
+    force_orientation_mapping(_R_N2W, x_nom, y_nom, z_nom,
+					_uT_nom, uT1_nom, _Omg_nom, h_Omega,
+					_F_nom, _psi_nom, _psi1_nom); 
+    
+    // zero angular rates
+    _Omg_nom.zero();
+   
+    
+    // nominally no moment
+    _M_nom.zero();
+        
 }
 
 /* Calculate thrust input, orientation matrix and angular velocity based on a force vector */
@@ -905,9 +1089,18 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 	
 	math::Vector<3> F_cor; F_cor.zero(); 	// corrective force term
 	F_cor = pos_err.emult(_gains.pos) + vel_err.emult(_gains.vel);
+	printf("DEBUG: pos_err (fb) = %d, %d, %d\n", (int)(pos_err(0)*1000.0f), (int)(pos_err(1)*1000.0f), (int)(pos_err(2)*1000.0f));
+	printf("DEBUG: vel_err (fb) = %d, %d, %d\n", (int)(vel_err(0)*1000.0f), (int)(vel_err(1)*1000.0f), (int)(vel_err(2)*1000.0f));
+	printf("DEBUG: isfinite F_cor(2) (fb) = %d\n", isfinite(F_cor(2)));
 	
-	math::Vector<3> F_des; F_des.zero();	// combined, desired force
-	F_des = F_cor + _F_nom;
+	math::Vector<3> F_des = _F_nom + F_cor;	// combined, desired force
+	//~ F_des = F_cor + _F_nom;
+	//~ F_des = _F_nom + F_cor;
+	float temp = _F_nom(2) + (float)F_cor(2);
+	printf("DEBUG: temp = %d\n", (int)(temp*1000.0f));
+	printf("DEBUG: F_cor (fb) = %d, %d, %d\n", (int)(F_cor(0)*1000.0f), (int)(F_cor(1)*1000.0f), (int)(F_cor(2)*1000.0f));
+	printf("DEBUG: _F_nom (fb) = %d, %d, %d\n", (int)(_F_nom(0)*1000.0f), (int)(_F_nom(1)*1000.0f), (int)(_F_nom(2)*1000.0f));
+	printf("DEBUG: F_des (fb) = %d, %d, %d\n", (int)(F_des(0)*1000.0f), (int)(F_des(1)*1000.0f), (int)(F_des(2)*1000.0f));
 	
 	/* map corrective force to input thrust, desired orientation, and desired angular velocity */
 	math::Matrix<3, 3> R_D2W;	R_D2W.zero();	// rotation matrix from desired body frame to world */
@@ -919,6 +1112,7 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 	math::Vector<3> h_Omega;	h_Omega.zero();
 	force_orientation_mapping(R_D2W, x_des, y_des, z_des, 
 			_uT_sp, uT1_des, Omg_des, h_Omega, F_des, _psi_nom, _psi1_nom);
+	printf("DEBUG: _uT_sp (fb)= %d\n", (int)(_uT_sp*1000.0f));
 	// uT_des is the first input value
 	// double check the calculation of uT1_des. F_cor doesn't affect?
 	
@@ -998,177 +1192,6 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
 	/* calculate moment inputs */
 	_M_sp = _M_cor + _M_nom;
 }
-
-/* hold position */
-void
-MulticopterTrajectoryControl::hold_position()
-{
-    // reset position and alt if necessary
-    reset_pos_nom();
-    reset_alt_nom();
-    reset_psi_nom();
-    
-    // set position derivatives to zero
-    _vel_nom.zero();
-    _acc_nom.zero();
-    _jerk_nom.zero();
-    _snap_nom.zero();
-    _psi1_nom = 0.0f;
-    _psi2_nom = 0.0f;
-    
-    // Force to just couteract gravity
-    _F_nom.zero();
-    _F_nom(2) = -_mass*GRAV;
-    math::Vector<3> x_nom;	x_nom.zero();
-    math::Vector<3> y_nom;	y_nom.zero();
-    math::Vector<3> z_nom;	z_nom.zero();
-    float uT1_nom = 0.0f;
-    math::Vector<3> h_Omega; 	h_Omega.zero();
-    force_orientation_mapping(_R_N2W, x_nom, y_nom, z_nom,
-					_uT_nom, uT1_nom, _Omg_nom, h_Omega,
-					_F_nom, _psi_nom, _psi1_nom); 
-    
-    
-    // zero angular rates
-    _Omg_nom.zero();
-   
-    
-    // nominally no moment
-    _M_nom.zero();
-        
-}
-
-/* Added by Ross Allen */
-void
-MulticopterTrajectoryControl::reset_trajectory()
-{
-        
-    memset(&_traj_spline, 0, sizeof(_traj_spline));
-    _control_trajectory_started = false;
-	_reset_pos_nom = true;
-	_reset_alt_nom = true;
-	_reset_psi_nom = true;
-	_pos.zero();
-    _vel.zero();
-    _R_B2W.identity();
-    _x_body.zero();	_x_body(0) = 1.0f;
-    _y_body.zero();	_y_body(1) = 1.0f;
-    _z_body.zero(); _z_body(2) = 1.0f;
-    _Omg_body.zero();
-	_pos_nom.zero();
-	_vel_nom.zero();
-    _acc_nom.zero();
-    _jerk_nom.zero();
-    _snap_nom.zero();
-    _psi_nom = 0.0f;
-    _psi1_nom = 0.0f;
-    _psi2_nom = 0.0f;
-    _R_N2W.identity();
-    _Omg_nom.zero();
-    _F_nom.zero();
-    _F_cor.zero();
-    _uT_nom = 0.0f;
-    _uT_sp = 0.0f;
-    _M_nom.zero();
-    _M_cor.zero();
-    _M_sp.zero();
-    _att_control.zero();
-        
-}
-
-float
-MulticopterTrajectoryControl::poly_eval(const std::vector<float>& coefs, float t)
-{
-    
-    typedef std::vector<float>::size_type vecf_sz;
-    vecf_sz deg = coefs.size()-1;
-
-    
-    // initialize return value
-    float p = coefs.at(deg);
-    
-    for(vecf_sz i = deg-1; ; --i){
-        
-        // Calculate with Horner's Rule
-        p = p*t + coefs.at(i);
-        
-        // Check break condition.
-        // This clunky for a for loop but is necessary because vecf_sz
-        // in some form of unsigned int. If the condition is left as
-        // i >= 0, then the condition is always true
-        if (i == 0) break;
-    }
-
-    return p;
-}
-
-float
-MulticopterTrajectoryControl::poly_eval(const float coefs_arr[N_POLY_COEFS], float t)
-{
-
-    // degree of polynomial
-    unsigned deg = N_POLY_COEFS-1;
-    
-    // initialize return value
-    float p = coefs_arr[deg];
-    
-    for(unsigned i = deg-1; ; --i){
-        
-        // Calculate with Horner's Rule
-        p = p*t + coefs_arr[i];
-        
-        // Check break condition.
-        // This clunky for a for loop but is necessary because vecf_sz
-        // in some form of unsigned int. If the condition is left as
-        // i >= 0, then the condition is always true
-        if (i == 0) break;
-    }
-
-    return p;
-}
-
-/* Cumulative sum over vector with initial value */
-void
-MulticopterTrajectoryControl::vector_cum_sum(
-const std::vector<float>& vec, float initval, std::vector<float>& vecsum){
-    
-    vecsum = vec;   // overwrite anything currently in vecsum
-    vecsum.at(0) += initval;
-    std::partial_sum(vecsum.begin(), vecsum.end(), vecsum.begin());
-}
-
-/* Evaluate derivatives of a polynomial */
-void
-MulticopterTrajectoryControl::poly_deriv(
-const std::vector< std::vector<float> >& poly,
-std::vector< std::vector<float> >& deriv) {
-
-    
-    typedef std::vector<float>::size_type vecf_sz;
-    typedef std::vector< std::vector<float> >::size_type vecf2d_sz;
-
-    
-    vecf2d_sz numrows = poly.size();
-    deriv.resize(numrows);      // resize number rows
-
-    
-    for (vecf2d_sz row = 0; row != numrows; ++row) {
-        
-        vecf_sz numcols = poly.at(row).size();
-        deriv.at(row).resize(numcols);
-        
-        for (vecf_sz col = 0; col != numcols; ++col) {
-            
-            deriv.at(row).at(col) = ((float)col)*poly.at(row).at(col);
-        }
-        
-        
-        // remove first element
-        deriv.at(row).erase(deriv.at(row).begin());
-    }
-    
-}
-
 
 void
 MulticopterTrajectoryControl::task_main()
@@ -1440,8 +1463,6 @@ MulticopterTrajectoryControl::task_main()
 			if (_control_mode.flag_control_trajectory_enabled) {
 				if (_actuators_0_pub > 0) {
 					orb_publish(ORB_ID(actuator_controls_0), _actuators_0_pub, &_actuators);
-					
-					//printf("DEBUG: publishing on actuator_controls_0\n");
 
 				} else {
 					_actuators_0_pub = orb_advertise(ORB_ID(actuator_controls_0), &_actuators);
