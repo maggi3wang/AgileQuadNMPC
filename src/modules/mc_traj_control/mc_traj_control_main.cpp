@@ -1087,13 +1087,9 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
     pos_err = _pos_nom - _pos;
     vel_err = _vel_nom - _vel;
     
-    math::Vector<3> F_cor; F_cor.zero(); 	// corrective force term
-    F_cor = pos_err.emult(_gains.pos) + vel_err.emult(_gains.vel);
+    math::Vector<3> F_cor = pos_err.emult(_gains.pos) + vel_err.emult(_gains.vel); 	// corrective force term
     
     math::Vector<3> F_des = _F_nom + F_cor;	// combined, desired force
-    //~ F_des = F_cor + _F_nom;
-    //~ F_des = _F_nom + F_cor;
-    float temp = _F_nom(2) + (float)F_cor(2);
     
     /* map corrective force to input thrust, desired orientation, and desired angular velocity */
     math::Matrix<3, 3> R_D2W;	R_D2W.zero();	// rotation matrix from desired body frame to world */

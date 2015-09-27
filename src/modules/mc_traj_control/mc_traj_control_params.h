@@ -53,7 +53,7 @@
  *
  * @min 0.0
  */
-#define TRAJ_GAINS_RP_OMG 0.5f
+#define TRAJ_GAINS_RP_OMG 0.1f
 
 /**
  * Proportional gain for yaw angular error
@@ -146,7 +146,7 @@
  * @min 0.0
  */
 //~ #define TRAJ_PARAMS_THROTTLE_PER_THRUST 0.0599f
-#define TRAJ_PARAMS_THROTTLE_PER_THRUST 0.01f
+#define TRAJ_PARAMS_THROTTLE_PER_THRUST 0.045f
 
 /**
  * Maximum Throttle Value
