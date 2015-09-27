@@ -1089,18 +1089,11 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
     
     math::Vector<3> F_cor; F_cor.zero(); 	// corrective force term
     F_cor = pos_err.emult(_gains.pos) + vel_err.emult(_gains.vel);
-    printf("DEBUG: pos_err (fb) = %d, %d, %d\n", (int)(pos_err(0)*1000.0f), (int)(pos_err(1)*1000.0f), (int)(pos_err(2)*1000.0f));
-    printf("DEBUG: vel_err (fb) = %d, %d, %d\n", (int)(vel_err(0)*1000.0f), (int)(vel_err(1)*1000.0f), (int)(vel_err(2)*1000.0f));
-    printf("DEBUG: isfinite F_cor(2) (fb) = %d\n", isfinite(F_cor(2)));
     
     math::Vector<3> F_des = _F_nom + F_cor;	// combined, desired force
     //~ F_des = F_cor + _F_nom;
     //~ F_des = _F_nom + F_cor;
     float temp = _F_nom(2) + (float)F_cor(2);
-    printf("DEBUG: temp = %d\n", (int)(temp*1000.0f));
-    printf("DEBUG: F_cor (fb) = %d, %d, %d\n", (int)(F_cor(0)*1000.0f), (int)(F_cor(1)*1000.0f), (int)(F_cor(2)*1000.0f));
-    printf("DEBUG: _F_nom (fb) = %d, %d, %d\n", (int)(_F_nom(0)*1000.0f), (int)(_F_nom(1)*1000.0f), (int)(_F_nom(2)*1000.0f));
-    printf("DEBUG: F_des (fb) = %d, %d, %d\n", (int)(F_des(0)*1000.0f), (int)(F_des(1)*1000.0f), (int)(F_des(2)*1000.0f));
     
     /* map corrective force to input thrust, desired orientation, and desired angular velocity */
     math::Matrix<3, 3> R_D2W;	R_D2W.zero();	// rotation matrix from desired body frame to world */
@@ -1112,7 +1105,6 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
     math::Vector<3> h_Omega;	h_Omega.zero();
     force_orientation_mapping(R_D2W, x_des, y_des, z_des, 
             _uT_sp, uT1_des, Omg_des, h_Omega, F_des, _psi_nom, _psi1_nom);
-    printf("DEBUG: _uT_sp (fb)= %d\n", (int)(_uT_sp*1000.0f));
     // uT_des is the first input value
     // double check the calculation of uT1_des. F_cor doesn't affect?
     

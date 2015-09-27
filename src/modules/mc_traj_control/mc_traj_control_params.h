@@ -146,7 +146,7 @@
  * @min 0.0
  */
 //~ #define TRAJ_PARAMS_THROTTLE_PER_THRUST 0.0599f
-#define TRAJ_PARAMS_THROTTLE_PER_THRUST 0.06f
+#define TRAJ_PARAMS_THROTTLE_PER_THRUST 0.01f
 
 /**
  * Maximum Throttle Value
