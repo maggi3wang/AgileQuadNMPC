@@ -1220,9 +1220,9 @@ MulticopterTrajectoryControl::task_main()
     
     /** TODO: change later with m and J estimators */
     _mass = MASS_TEMP;
+    _J_B(0, 0) = XY_INERTIA_TEMP;
     _J_B(1, 1) = XY_INERTIA_TEMP;
-    _J_B(2, 2) = XY_INERTIA_TEMP;
-    _J_B(3, 3) = Z_INERTIA_TEMP;
+    _J_B(2, 2) = Z_INERTIA_TEMP;
     
     _safe_params.thrust_min = TRAJ_PARAMS_VERT_ACC_MIN*_mass ;
     _safe_params.thrust_max = TRAJ_PARAMS_VERT_ACC_MAX*_mass ;
