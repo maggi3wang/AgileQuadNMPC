@@ -9,44 +9,12 @@
  * @author Ross Allen <rallen10@stanford.edu>
  */
  
-/**
- * Proportional gain for horizontal position error
- *
- * @min 0.0
- */
-//~ #define TRAJ_GAINS_XY_POS 2.0f
-#define TRAJ_GAINS_XY_POS 1.0f
-
-/**
- * Proportional gain for vertical position error
- *
- * @min 0.0
- */
-//~ #define TRAJ_GAINS_Z_POS 1.0f
-#define TRAJ_GAINS_Z_POS 1.0f
-
-/**
- * Proportional gain for horizontal velocity error
- *
- * @min 0.0
- */
-//~ #define TRAJ_GAINS_XY_VEL 1.0f
-#define TRAJ_GAINS_XY_VEL 1.0f
-
-/**
- * Proportional gain for vertical velocity error
- *
- * @min 0.0
- */
-//~ #define TRAJ_GAINS_Z_VEL 1.0f
-#define TRAJ_GAINS_Z_VEL 1.0f
-
-/**
+ /**
  * Proportional gain for roll, pitch angular error
  *
  * @min 0.0
  */
-#define TRAJ_GAINS_RP_ANG 0.7f
+#define TRAJ_GAINS_RP_ANG 0.4f
 
 /**
  * Proportional gain for roll, pitch angular velocity error
@@ -69,6 +37,35 @@
  * @min 0.0
  */
 #define TRAJ_GAINS_YAW_OMG 0.1f
+ 
+/**
+ * Proportional gain for horizontal position error
+ *
+ * @min 0.0
+ */
+#define TRAJ_GAINS_XY_POS 1.0f
+
+/**
+ * Proportional gain for horizontal velocity error
+ *
+ * @min 0.0
+ */
+#define TRAJ_GAINS_XY_VEL 10.0f
+
+/**
+ * Proportional gain for vertical position error
+ *
+ * @min 0.0
+ */
+#define TRAJ_GAINS_Z_POS 10.0f
+
+/**
+ * Proportional gain for vertical velocity error
+ *
+ * @min 0.0
+ */
+#define TRAJ_GAINS_Z_VEL 10.0f
+
 
 /**
  * Minimum thrust
@@ -145,7 +142,7 @@
  * @min 0.0
  */
 //~ #define TRAJ_PARAMS_THROTTLE_PER_THRUST 0.0599f
-#define TRAJ_PARAMS_THROTTLE_PER_THRUST 0.045f
+#define TRAJ_PARAMS_THROTTLE_PER_THRUST 0.059f
 
 /**
  * Maximum Throttle Value
