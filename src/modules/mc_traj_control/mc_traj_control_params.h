@@ -151,3 +151,12 @@
  * @min 0.0
  */
 #define TRAJ_PARAMS_THROTTLE_MAX 1.0f
+
+/**
+ * Smoothing factor for low pass filter for throttle mapping
+ * 
+ * @unit unitless
+ * @min 0.0
+ * @max 1.0
+ */
+#define THROTTLE_FILTER_SMOOTHING 0.1f

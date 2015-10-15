@@ -67,6 +67,7 @@
 #include <uORB/topics/trajectory_nominal_values.h>
 #include <uORB/topics/trajectory_spline.h>
 #include <uORB/topics/actuator_controls.h>
+#include <uORB/topics/sensor_combined.h>
 #include <systemlib/param/param.h>
 #include <systemlib/err.h>
 #include <systemlib/systemlib.h>
@@ -134,6 +135,7 @@ private:
     int		_arming_sub;			/**< arming status of outputs */
     int		_local_pos_sub;			/**< vehicle local position */
     int     _traj_spline_sub;       /**< trajectory spline */
+    int		_sensor_combined_sub;	/**< sensor data */
 
     orb_advert_t	_att_sp_pub;			/**< attitude setpoint publication */
     orb_advert_t	_att_rates_sp_pub;		/**< attitude rates setpoint publication */
@@ -153,6 +155,7 @@ private:
     struct trajectory_spline_s  		_traj_spline;   /**< trajectory spline */
     struct actuator_controls_s			_actuators;		/**< actuator controls */
     struct trajectory_nominal_values_s	_traj_nom;		/**< nominal trajectory values */
+    struct sensor_combined_s 			_sensor;		/**< sensor data */ 
 
 
     struct {
@@ -220,6 +223,10 @@ private:
     float _mass;					/**< mass of quadrotor (kg) */
     math::Matrix<3, 3> _J_B;	/**< inertia matrix, fixed to body (kg*m^2) */
     
+    /* Filter properties to estimate throttle mapping */
+    float _k_thr;			/**< scaling factor for F/m = _k_thr*throttle */
+    float _alpha;			/**< exponential decay weight for low pass filter */
+    float _thr_prev;		/**< previous value of throttle input */
     
     // time vectors
     std::vector<float> _spline_delt_sec; // time step sizes for each segment
@@ -370,6 +377,7 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     _arming_sub(-1),
     _local_pos_sub(-1),
     _traj_spline_sub(-1),
+    _sensor_combined_sub(-1),
 
 /* publications */
     _att_sp_pub(-1),
@@ -397,6 +405,7 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     memset(&_traj_spline, 0, sizeof(_traj_spline));
     memset(&_actuators, 0, sizeof(_actuators));
     memset(&_traj_nom, 0, sizeof(_traj_nom));
+    memset(&_sensor, 0, sizeof(_sensor));
 
     memset(&_ref_pos, 0, sizeof(_ref_pos));
     
@@ -464,9 +473,11 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 
     _n_spline_seg = 0;
     
-    /** TODO: update with better estimate */
     _mass = 0.0f;
     _J_B.identity();
+    _alpha = THROTTLE_FILTER_SMOOTHING;
+    _k_thr = 0.0f;
+    _thr_prev = 0.0f;
 
 }
 
@@ -559,6 +570,12 @@ MulticopterTrajectoryControl::poll_subscriptions()
         orb_copy(ORB_ID(trajectory_spline), _traj_spline_sub, &_traj_spline);
         _control_trajectory_started = false;
     }
+    
+    orb_check(_sensor_combined_sub, &updated);
+    
+    if (updated) {
+		orb_copy(ORB_ID(sensor_combined), _sensor_combined_sub, &_sensor);
+	}
     
 }
 
@@ -1223,6 +1240,11 @@ MulticopterTrajectoryControl::task_main()
     _J_B(0, 0) = XY_INERTIA_TEMP;
     _J_B(1, 1) = XY_INERTIA_TEMP;
     _J_B(2, 2) = Z_INERTIA_TEMP;
+    _alpha = THROTTLE_FILTER_SMOOTHING;
+    _alpha = (_alpha < 0.0f) ? 0.0f : _alpha;
+    _alpha = (_alpha > 1.0f) ? 1.0f : _alpha;
+    _k_thr = 1.0f/(TRAJ_PARAMS_THROTTLE_PER_THRUST*_mass);
+    _thr_prev = 0.0f;
     
     _safe_params.thrust_min = TRAJ_PARAMS_VERT_ACC_MIN*_mass ;
     _safe_params.thrust_max = TRAJ_PARAMS_VERT_ACC_MAX*_mass ;
@@ -1374,12 +1396,17 @@ MulticopterTrajectoryControl::task_main()
             _att_control = _M_sp;
             
             /**
-             * map thrust to throttle and apply safety
+             * Apply filter to map thrust to throttle and apply safety
              */
-            float throttle = _uT_sp*TRAJ_PARAMS_THROTTLE_PER_THRUST;
+            float zw_dot_zb = _R_B2W(2,2);	// R_W2B*z_W dot z_B = R_B2W'*z_W dot z_B = R_B2W'(:,2) dot [0,0,1]' = R_B2W(2,2)' = R_B2W(2,2)
+            float k_measured = (1.0f/_thr_prev)*(GRAV*zw_dot_zb - _sensor.accelerometer_m_s2[2]);
+            _k_thr = _alpha*k_measured + (1.0f - _alpha)*_k_thr;
+            float throttle = _uT_sp/(_k_thr*_mass);
+            //~ float throttle = _uT_sp*TRAJ_PARAMS_THROTTLE_PER_THRUST;
             if (throttle > TRAJ_PARAMS_THROTTLE_MAX){
                 throttle = TRAJ_PARAMS_THROTTLE_MAX;
             }
+            _thr_prev = throttle;
              
             /**
              * Publish topics
