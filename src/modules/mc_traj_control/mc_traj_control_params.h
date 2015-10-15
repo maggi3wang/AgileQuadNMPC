@@ -167,4 +167,4 @@
  * @min 0.0
  * @max 1.0
  */
-#define THROTTLE_FILTER_SMOOTHING 0.1f
+#define THROTTLE_FILTER_SMOOTHING 0.01f
