@@ -786,6 +786,8 @@ MulticopterTrajectoryControl::reset_trajectory()
     _M_cor.zero();
     _M_sp.zero();
     _att_control.zero();
+    _k_thr = 1.0f/(TRAJ_PARAMS_THROTTLE_PER_THRUST*_mass);
+    _thr_prev = TRAJ_PARAMS_THROTTLE_PER_THRUST*_mass*GRAV;
         
 }
 
@@ -1244,7 +1246,7 @@ MulticopterTrajectoryControl::task_main()
     _alpha = (_alpha < 0.0f) ? 0.0f : _alpha;
     _alpha = (_alpha > 1.0f) ? 1.0f : _alpha;
     _k_thr = 1.0f/(TRAJ_PARAMS_THROTTLE_PER_THRUST*_mass);
-    _thr_prev = 0.0f;
+    _thr_prev = TRAJ_PARAMS_THROTTLE_PER_THRUST*_mass*GRAV;
     
     _safe_params.thrust_min = TRAJ_PARAMS_VERT_ACC_MIN*_mass ;
     _safe_params.thrust_max = TRAJ_PARAMS_VERT_ACC_MAX*_mass ;
@@ -1397,15 +1399,15 @@ MulticopterTrajectoryControl::task_main()
             
             /**
              * Apply filter to map thrust to throttle and apply safety
+             * NOTE: assume quadrotor is in air
              */
             float zw_dot_zb = _R_B2W(2,2);	// R_W2B*z_W dot z_B = R_B2W'*z_W dot z_B = R_B2W'(:,2) dot [0,0,1]' = R_B2W(2,2)' = R_B2W(2,2)
             float k_measured = (1.0f/_thr_prev)*(GRAV*zw_dot_zb - _sensor.accelerometer_m_s2[2]);
             _k_thr = _alpha*k_measured + (1.0f - _alpha)*_k_thr;
             float throttle = _uT_sp/(_k_thr*_mass);
             //~ float throttle = _uT_sp*TRAJ_PARAMS_THROTTLE_PER_THRUST;
-            if (throttle > TRAJ_PARAMS_THROTTLE_MAX){
-                throttle = TRAJ_PARAMS_THROTTLE_MAX;
-            }
+            throttle = (throttle > TRAJ_PARAMS_THROTTLE_MAX) ? TRAJ_PARAMS_THROTTLE_MAX : throttle;
+            throttle = (throttle < TRAJ_PARAMS_THROTTLE_MIN) ? TRAJ_PARAMS_THROTTLE_MIN : throttle;
             _thr_prev = throttle;
              
             /**
