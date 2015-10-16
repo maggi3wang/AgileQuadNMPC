@@ -563,8 +563,10 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
                     
                     /* Use vicon yaw if valid and just overwrite*/
                     /* Added by Ross Allen */
+                    math::Matrix<3,3> R_magCor = R_decl;	// correction for magnetic declination
                     if(vicon_valid){
                         att.yaw = vicon_pos.yaw;
+                        R_magCor.identity(); 		// magnetometer not used, so no correction
                     }
 
 					att.rollspeed = x_aposteriori[0];
@@ -584,7 +586,7 @@ const unsigned int loop_interval_alarm = 6500;	// loop interval in microseconds
 					/* magnetic declination */
 
 					math::Matrix<3, 3> R_body = (&Rot_matrix[0]);
-					R = R_decl * R_body;
+					R = R_magCor * R_body;
 
 					/* copy rotation matrix */
 					memcpy(&att.R[0][0], &R.data[0][0], sizeof(att.R));

@@ -518,7 +518,8 @@ MulticopterTrajectoryControl::poll_subscriptions()
         // access current body rotation and account for px4 angular offset from body frame
         //~ _R_P2W.set(_att.R);	// PX4 body frame to world
         //~ _R_B2W = _R_P2W*_R_B2P;	// body frame to world accounting for px4 body frame
-        _R_B2W.set(_att.R);
+        //~ _R_B2W.set(_att.R);
+        _R_B2W.from_euler(_att.roll, _att.pitch, _att.yaw);
         for (int i = 0; i < 3; i++) {
             _x_body(i) = _R_B2W(i,0);
             _y_body(i) = _R_B2W(i,1);
@@ -1126,7 +1127,11 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
     /* rotational corrective input */
     //~ printf("DEBUG: _att.R_valid = %d\n", _att.R_valid);
     ang_err = vee_map((_R_B2W.transposed())*R_D2W - (R_D2W.transposed())*_R_B2W)*0.5f;
-    //~ printf("DEBUG: ang err %d, %d, %d\n", (int)(ang_err(0)*1000.0f), (int)(ang_err(1)*1000.0f), (int)(ang_err(2)*1000.0f));
+    //~ math::Vector<3> temp_ang = _R_B2W.to_euler();
+    //~ math::Vector<3> temp_angSP = R_D2W.to_euler();
+    //~ printf("DEBUG: yaw %d \n", (int)(temp_ang(2)*10000.0f));
+    //~ printf("DEBUG: yaw SP %d \n", (int)(temp_angSP(2)*10000.0f));
+    //~ printf("DEBUG: ang err %d, %d, %d\n", (int)(ang_err(0)*10000.0f), (int)(ang_err(1)*10000.0f), (int)(ang_err(2)*10000.0f));
     // Check valid orientation nearest to current (Mellinger & Kumar section IV)
     //~ math::Matrix<3,3> R_D2W_neg = R_D2W;
     //~ math::Vector<3> x_des_neg = -x_des;
@@ -1195,6 +1200,7 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
     
     /* calculate corrective (feedback) moment inputs */
     _M_cor = ang_err.emult(_gains.ang) + omg_err.emult(_gains.omg);
+    //~ printf("DEBUG:  _M_cor %d, %d, %d\n", (int)(_M_cor(0)*10000.0f), (int)(_M_cor(1)*10000.0f), (int)(_M_cor(2)*10000.0f));
     
     /* calculate moment inputs */
     _M_sp = _M_cor + _M_nom;

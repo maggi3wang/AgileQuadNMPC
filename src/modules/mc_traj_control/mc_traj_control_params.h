@@ -28,7 +28,7 @@
  *
  * @min 0.0
  */
-#define TRAJ_GAINS_YAW_ANG 1.0f
+#define TRAJ_GAINS_YAW_ANG 2.0f
 
 
 /**
@@ -36,7 +36,7 @@
  *
  * @min 0.0
  */
-#define TRAJ_GAINS_YAW_OMG 0.1f
+#define TRAJ_GAINS_YAW_OMG 0.25f
  
 /**
  * Proportional gain for horizontal position error
