@@ -84,7 +84,7 @@
 #define ASL_LAB_CENTER_Z    -1.5f
 #define ASL_LAB_CENTER_YAW  -1.68f
 
-#define SPLINE_START_DELAY 500000
+#define SPLINE_START_DELAY 5000000
 #define N_POLY_COEFS    10
 
 #define GRAV 	9.81f
@@ -92,9 +92,12 @@
 #define ZERO_GAIN_THRESHOLD 0.000001f
 
 // TODO remove these later when I have an estimator for m and inertia
-#define MASS_TEMP 0.9943f
-#define XY_INERTIA_TEMP 0.0018f
-#define Z_INERTIA_TEMP 0.0037f
+#define MASS_TEMP 0.9574f
+//~ #define XY_INERTIA_TEMP 0.0018f
+//~ #define Z_INERTIA_TEMP 0.0037f
+#define X_INERTIA_EST 0.00484f
+#define Y_INERTIA_EST 0.00565f
+#define Z_INERTIA_EST 0.1185f
 
 /**
  * Multicopter position control app start / stop handling function
@@ -1106,10 +1109,15 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
     /* translational corrective input */
     pos_err = _pos_nom - _pos;
     vel_err = _vel_nom - _vel;
+    //~ printf("DEBUG: pos_err %d, %d, %d\n", (int)(pos_err(0)*10000.0f), (int)(pos_err(1)*10000.0f), (int)(pos_err(2)*10000.0f));
+    //~ printf("DEBUG: vel_err %d, %d, %d\n", (int)(vel_err(0)*10000.0f), (int)(vel_err(1)*10000.0f), (int)(vel_err(2)*10000.0f));
     
     math::Vector<3> F_cor = pos_err.emult(_gains.pos) + vel_err.emult(_gains.vel); 	// corrective force term
     
     math::Vector<3> F_des = _F_nom + F_cor;	// combined, desired force
+    //~ printf("DEBUG: _F_nom %d, %d, %d\n", (int)(_F_nom(0)*10000.0f), (int)(_F_nom(1)*10000.0f), (int)(_F_nom(2)*10000.0f));
+    //~ printf("DEBUG: F_cor %d, %d, %d\n", (int)(F_cor(0)*10000.0f), (int)(F_cor(1)*10000.0f), (int)(F_cor(2)*10000.0f));
+    //~ printf("DEBUG: F_des %d, %d, %d\n", (int)(F_des(0)*10000.0f), (int)(F_des(1)*10000.0f), (int)(F_des(2)*10000.0f));
     
     /* map corrective force to input thrust, desired orientation, and desired angular velocity */
     math::Matrix<3, 3> R_D2W;	R_D2W.zero();	// rotation matrix from desired body frame to world */
@@ -1245,9 +1253,9 @@ MulticopterTrajectoryControl::task_main()
     
     /** TODO: change later with m and J estimators */
     _mass = MASS_TEMP;
-    _J_B(0, 0) = XY_INERTIA_TEMP;
-    _J_B(1, 1) = XY_INERTIA_TEMP;
-    _J_B(2, 2) = Z_INERTIA_TEMP;
+    _J_B(0, 0) = X_INERTIA_EST;
+    _J_B(1, 1) = Y_INERTIA_EST;
+    _J_B(2, 2) = Z_INERTIA_EST;
     _alpha = THROTTLE_FILTER_SMOOTHING;
     _alpha = (_alpha < 0.0f) ? 0.0f : _alpha;
     _alpha = (_alpha > 1.0f) ? 1.0f : _alpha;
