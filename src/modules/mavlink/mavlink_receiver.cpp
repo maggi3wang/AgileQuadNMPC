@@ -208,6 +208,7 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 		break;
         
     case MAVLINK_MSG_ID_TRAJ_SEG:
+		//~ printf("DEBUG: traj seg message recieved\n");
         handle_message_traj_seg(msg);
         break;
 
@@ -591,20 +592,19 @@ MavlinkReceiver::handle_message_poly_coefs(mavlink_message_t *msg)
 void
 MavlinkReceiver::handle_message_traj_seg(mavlink_message_t *msg)
 {
-    
+		
     /* decode message */
     mavlink_traj_seg_t mav_traj_seg;
     mavlink_msg_traj_seg_decode(msg, &mav_traj_seg);
     
-    
     /* Check valid size of spline */
     if(mav_traj_seg.nSeg > MAX_TRAJ_SEGS) {
         warnx("Too many spline segments");
-        _uorb_traj_spline = trajectory_spline_s();  // reconstruct to remove data
+        memset(&_uorb_traj_spline, 0, sizeof(trajectory_spline_s)); // remove data
+        //~ _uorb_traj_spline = trajectory_spline_s(); 
         _seg_count = 0; // reset segment count
         _valid_traj_sequence = false;
     } else {
-    
         /* create structure to pass with uORB */
         struct trajectory_segment_s traj_seg;
         memset(&traj_seg, 0, sizeof(traj_seg));
@@ -627,16 +627,16 @@ MavlinkReceiver::handle_message_traj_seg(mavlink_message_t *msg)
         
         if (traj_seg.curSeg == 1){
             // clear old data for new trajectory
-            _uorb_traj_spline = trajectory_spline_s();
+            memset(&_uorb_traj_spline, 0, sizeof(trajectory_spline_s)); // remove old traj data
         }
         
         if (traj_seg.curSeg == _seg_count+1) {
             _valid_traj_sequence = true;     // traj segments coming in valid order
             _uorb_traj_spline.segArr[traj_seg.curSeg-1] = traj_seg; // add segment
             _seg_count++;   // increment seg count 
-            //~ _uorb_traj_spline.push_back(traj_seg);   // add segment to spline
+            // //~ _uorb_traj_spline.push_back(traj_seg);   // add segment to spline
         } else {
-            _uorb_traj_spline = trajectory_spline_s();  // reconstruct to remove data
+            memset(&_uorb_traj_spline, 0, sizeof(trajectory_spline_s)); // remove data
             _seg_count = 0; // reset seg count
             _valid_traj_sequence = false;
         }
