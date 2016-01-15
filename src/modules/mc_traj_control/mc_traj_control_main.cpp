@@ -169,6 +169,7 @@ private:
         math::Vector<3> sp_offs_max;
         float gim_lock;
         float freefall_thresh;
+        math::Vector<3> ang_int_limit;
     }		_safe_params;
     
     struct {
@@ -176,6 +177,7 @@ private:
         math::Vector<3> vel;
         math::Vector<3> ang;
         math::Vector<3> omg;
+        math::Vector<3> ang_int;
     }		_gains;
 
     struct map_projection_reference_s _ref_pos;
@@ -219,6 +221,7 @@ private:
     math::Vector<3> _M_cor;			/**< corrective moment expressed in body coords */
     math::Vector<3> _M_sp;			/**< moment setpoint in body coords */
     math::Vector<3>	_att_control;	/**< attitude control vector */
+    math::Vector<3> _ang_err_int;	/**< angular error integral*/
     
     int _n_spline_seg;      /** < number of segments in spline (not max number, necassarily) */
     
@@ -329,7 +332,7 @@ private:
      * Set position setpoint using trajectory control - Ross Allen
      */
     void        trajectory_nominal_state(float t, float start_time);
-    void		trajectory_feedback_controller();
+    void		trajectory_feedback_controller(float dt);
     void        reset_trajectory();
     void		hold_position();
     void		force_orientation_mapping(math::Matrix<3,3>& R_S2W, math::Vector<3>& x_s, math::Vector<3>& y_s, math::Vector<3>& z_s,
@@ -425,6 +428,9 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     _gains.omg(0) = TRAJ_GAINS_RP_OMG;
     _gains.omg(1) = TRAJ_GAINS_RP_OMG;
     _gains.omg(2) = TRAJ_GAINS_YAW_OMG;
+    _gains.ang_int(0) = TRAJ_GAINS_RP_ANG_INT;
+    _gains.ang_int(1) = TRAJ_GAINS_RP_ANG_INT;
+    _gains.ang_int(2) = TRAJ_GAINS_YAW_ANG_INT;
 
     /* retrieve safety parameters */
     _safe_params.thrust_min = 0.0f;
@@ -440,6 +446,9 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     }
     _safe_params.gim_lock = TRAJ_PARAMS_GIMBAL_LOCK;
     _safe_params.freefall_thresh = TRAJ_PARAMS_FREEFALL_THRESHOLD;
+    _safe_params.ang_int_limit(0) = TRAJ_PARAMS_RP_INT_LIMIT;
+    _safe_params.ang_int_limit(1) = TRAJ_PARAMS_RP_INT_LIMIT;
+    _safe_params.ang_int_limit(2) = TRAJ_PARAMS_YAW_INT_LIMIT;
     
     _pos.zero();
     _vel.zero();
@@ -473,6 +482,7 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     _M_cor.zero();
     _M_sp.zero();
     _att_control.zero();
+    _ang_err_int.zero();
 
     _n_spline_seg = 0;
     
@@ -792,6 +802,9 @@ MulticopterTrajectoryControl::reset_trajectory()
     _att_control.zero();
     _k_thr = 1.0f/(TRAJ_PARAMS_THROTTLE_PER_THRUST*_mass);
     _thr_prev = TRAJ_PARAMS_THROTTLE_PER_THRUST*_mass*GRAV;
+    
+    // reset angular error integral
+    _ang_err_int.zero();
         
 }
 
@@ -1094,7 +1107,7 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_time
 
 /* Apply feedback control to nominal trajectory */
 void
-MulticopterTrajectoryControl::trajectory_feedback_controller()
+MulticopterTrajectoryControl::trajectory_feedback_controller(float dt)
 {
     /* error terms */
     math::Vector<3> pos_err;
@@ -1132,7 +1145,28 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
     // uT_des is the first input value
     // double check the calculation of uT1_des. F_cor doesn't affect?
     
-    /* rotational corrective input */
+    /** ROTATIONAL CORRECTIVE INPUT */
+    
+    /* fill attitude setpoint */
+    _att_sp.timestamp = hrt_absolute_time();
+    math::Vector<3> eul_des = R_D2W.to_euler();
+    _att_sp.roll_body = eul_des(0);
+    _att_sp.pitch_body = eul_des(1);
+    _att_sp.yaw_body = eul_des(2);
+    _att_sp.R_valid = false;
+    _att_sp.thrust = _uT_sp;
+    _att_sp.q_d_valid = false;
+    _att_sp.q_e_valid = false;
+    
+    /* publish attitude setpoint */
+    if (_att_sp_pub > 0) {
+        orb_publish(ORB_ID(vehicle_attitude_setpoint), _att_sp_pub, &_att_sp);
+
+    } else {
+        _att_sp_pub = orb_advertise(ORB_ID(vehicle_attitude_setpoint), &_att_sp);
+    }
+    
+    /* calculate angular error */
     //~ printf("DEBUG: _att.R_valid = %d\n", _att.R_valid);
     ang_err = vee_map((_R_B2W.transposed())*R_D2W - (R_D2W.transposed())*_R_B2W)*0.5f;
     //~ math::Vector<3> temp_ang = _R_B2W.to_euler();
@@ -1156,24 +1190,17 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
         //~ printf("DEBUG: using neg\n");
     //~ }
     
-    /* fill attitude setpoint */
-    _att_sp.timestamp = hrt_absolute_time();
-    math::Vector<3> eul_des = R_D2W.to_euler();
-    _att_sp.roll_body = eul_des(0);
-    _att_sp.pitch_body = eul_des(1);
-    _att_sp.yaw_body = eul_des(2);
-    _att_sp.R_valid = false;
-    _att_sp.thrust = _uT_sp;
-    _att_sp.q_d_valid = false;
-    _att_sp.q_e_valid = false;
-    
-    /* publish attitude setpoint */
-    if (_att_sp_pub > 0) {
-        orb_publish(ORB_ID(vehicle_attitude_setpoint), _att_sp_pub, &_att_sp);
-
-    } else {
-        _att_sp_pub = orb_advertise(ORB_ID(vehicle_attitude_setpoint), &_att_sp);
-    }
+    /* calculate integral angular error */
+    for (int i = 0; i < 3; i++){
+		float aei = _ang_err_int(i) + _gains.ang_int(i)*ang_err(i)*dt;
+		
+		if (isfinite(aei) && aei > -_safe_params.ang_int_limit(i) && 
+			aei < _safe_params.ang_int_limit(i)){
+				// note that mc_att_control also checks _M_cor is not greater than integral limit. Not sure why...
+				_ang_err_int(i) = aei;
+		}
+		
+	}
     
     /* fill attitude rates setpoint */
     _att_rates_sp.timestamp = hrt_absolute_time();
@@ -1207,7 +1234,7 @@ MulticopterTrajectoryControl::trajectory_feedback_controller()
     omg_err = (_R_B2W.transposed())*R_D2W*Omg_des - _Omg_body;
     
     /* calculate corrective (feedback) moment inputs */
-    _M_cor = ang_err.emult(_gains.ang) + omg_err.emult(_gains.omg);
+    _M_cor = ang_err.emult(_gains.ang) + omg_err.emult(_gains.omg) + _ang_err_int;
     //~ printf("DEBUG:  _M_cor %d, %d, %d\n", (int)(_M_cor(0)*10000.0f), (int)(_M_cor(1)*10000.0f), (int)(_M_cor(2)*10000.0f));
     
     /* calculate moment inputs */
@@ -1292,6 +1319,16 @@ MulticopterTrajectoryControl::task_main()
 
         hrt_abstime t = hrt_absolute_time();
         float t_sec = ((float)t)*0.000001f;
+        static uint64_t last_run = 0;
+		float dt = (hrt_absolute_time() - last_run) / 1000000.0f;
+		last_run = hrt_absolute_time();
+
+		/* guard against too small (< 2ms) and too large (> 20ms) dt's */
+		if (dt < 0.002f) {
+			dt = 0.002f;
+		} else if (dt > 0.02f) {
+			dt = 0.02f;
+		}
 
         if (_control_mode.flag_armed && !was_armed) {
             /* reset setpoints, integrals and trajectory on arming */
@@ -1408,7 +1445,7 @@ MulticopterTrajectoryControl::task_main()
             /**
              * Apply feedback control to nominal trajectory
              */
-            trajectory_feedback_controller();
+            trajectory_feedback_controller(dt);
             _att_control = _M_sp;
             
             /**

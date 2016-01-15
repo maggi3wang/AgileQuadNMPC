@@ -18,6 +18,13 @@
 #define TRAJ_GAINS_RP_ANG 0.25f
 
 /**
+ * Integral gain for roll, pitch angular error
+ * 
+ * @min 0.0
+ */
+#define TRAJ_GAINS_RP_ANG_INT 0.0f
+
+/**
  * Proportional gain for roll, pitch angular velocity error
  *
  * @min 0.0
@@ -33,6 +40,13 @@
 //~ #define TRAJ_GAINS_YAW_ANG 1.5f
 #define TRAJ_GAINS_YAW_ANG 0.5f
 
+/**
+ * Integral gain for yaw angular error
+ * 
+ * @min 0.0
+ */
+#define TRAJ_GAINS_YAW_ANG_INT 0.0f
+
 
 /**
  * Proportional gain for yaw angular velocity error
@@ -41,6 +55,7 @@
  */
 //~ #define TRAJ_GAINS_YAW_OMG 0.5f
 #define TRAJ_GAINS_YAW_OMG 0.25f
+
  
 /**
  * Proportional gain for horizontal position error
@@ -113,6 +128,20 @@
  */
 #define TRAJ_PARAMS_Z_VEL_MAX 2.0f
 
+/**
+ * Saturation limit for roll, pitch angular error integrator
+ * 
+ * @unit rad*sec (?)
+ */
+ #define TRAJ_PARAMS_RP_INT_LIMIT 0.3f
+
+/**
+ * Saturation limit for yaw angular error integrator
+ * 
+ * @unit rad*sec (?)
+ */
+ #define TRAJ_PARAMS_YAW_INT_LIMIT 0.3f
+ 
 /**
  * Maximum tilt angle in air
  *
