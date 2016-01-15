@@ -15,7 +15,7 @@
  * @min 0.0
  */
 //~ #define TRAJ_GAINS_RP_ANG 0.4f
-#define TRAJ_GAINS_RP_ANG 0.25f
+#define TRAJ_GAINS_RP_ANG 0.1f
 
 /**
  * Integral gain for roll, pitch angular error
