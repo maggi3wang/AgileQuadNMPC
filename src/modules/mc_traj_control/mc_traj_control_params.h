@@ -45,6 +45,7 @@
  * 
  * @min 0.0
  */
+/* NOTE: observed bad behavior even at very low gains. Should be zero or removed all together */
 #define TRAJ_GAINS_YAW_ANG_INT 0.0f
 
 /**
@@ -77,7 +78,7 @@
  * @min 0.0
  */
 //~ #define TRAJ_GAINS_XY_POS 2.0f
-#define TRAJ_GAINS_XY_POS 0.0f
+#define TRAJ_GAINS_XY_POS 2.0f
 
 /**
  * Proportional gain for horizontal velocity error
@@ -85,7 +86,7 @@
  * @min 0.0
  */
 //~ #define TRAJ_GAINS_XY_VEL 4.0f
-#define TRAJ_GAINS_XY_VEL 0.0f
+#define TRAJ_GAINS_XY_VEL 4.0f
 
 /**
  * Proportional gain for vertical position error
@@ -93,7 +94,7 @@
  * @min 0.0
  */
 //~ #define TRAJ_GAINS_Z_POS 4.0f
-#define TRAJ_GAINS_Z_POS 0.0f
+#define TRAJ_GAINS_Z_POS 4.0f
 
 /**
  * Proportional gain for vertical velocity error
@@ -101,7 +102,7 @@
  * @min 0.0
  */
 //~ #define TRAJ_GAINS_Z_VEL 3.0f
-#define TRAJ_GAINS_Z_VEL 0.0f
+#define TRAJ_GAINS_Z_VEL 3.0f
 
 /**
  * Minimum thrust
