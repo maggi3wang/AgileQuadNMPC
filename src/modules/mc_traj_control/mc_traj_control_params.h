@@ -10,19 +10,20 @@
  */
  
  /**
- * Proportional gain for roll, pitch angular error
- *
- * @min 0.0
- */
-//~ #define TRAJ_GAINS_RP_ANG 0.4f
-#define TRAJ_GAINS_RP_ANG 0.1f
-
-/**
  * Integral gain for roll, pitch angular error
  * 
  * @min 0.0
  */
 #define TRAJ_GAINS_RP_ANG_INT 0.0f
+ 
+ /**
+ * Proportional gain for roll, pitch angular error
+ *
+ * @min 0.0
+ */
+//~ #define TRAJ_GAINS_RP_ANG 0.4f
+//~ #define TRAJ_GAINS_RP_ANG 0.075f
+#define TRAJ_GAINS_RP_ANG 0.4f
 
 /**
  * Proportional gain for roll, pitch angular velocity error
@@ -30,7 +31,21 @@
  * @min 0.0
  */
 //~ #define TRAJ_GAINS_RP_OMG 0.1f
-#define TRAJ_GAINS_RP_OMG 0.1f
+#define TRAJ_GAINS_RP_OMG 0.08f
+
+/**
+ * Derivative gain for roll, pitch angular velocity error
+ *
+ * @min 0.0
+ */
+#define TRAJ_GAINS_RP_OMG_DER 0.001f
+
+/**
+ * Integral gain for yaw angular error
+ * 
+ * @min 0.0
+ */
+#define TRAJ_GAINS_YAW_ANG_INT 0.0f
 
 /**
  * Proportional gain for yaw angular error
@@ -39,13 +54,6 @@
  */
 //~ #define TRAJ_GAINS_YAW_ANG 1.5f
 #define TRAJ_GAINS_YAW_ANG 0.5f
-
-/**
- * Integral gain for yaw angular error
- * 
- * @min 0.0
- */
-#define TRAJ_GAINS_YAW_ANG_INT 0.0f
 
 
 /**
@@ -56,6 +64,12 @@
 //~ #define TRAJ_GAINS_YAW_OMG 0.5f
 #define TRAJ_GAINS_YAW_OMG 0.25f
 
+/**
+ * Derivative gain for yaw angular velocity error
+ *
+ * @min 0.0
+ */
+#define TRAJ_GAINS_YAW_OMG_DER 0.0f
  
 /**
  * Proportional gain for horizontal position error

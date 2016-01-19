@@ -175,9 +175,10 @@ private:
     struct {
         math::Vector<3> pos;
         math::Vector<3> vel;
+        math::Vector<3> ang_int;
         math::Vector<3> ang;
         math::Vector<3> omg;
-        math::Vector<3> ang_int;
+        math::Vector<3> omg_der;
     }		_gains;
 
     struct map_projection_reference_s _ref_pos;
@@ -201,6 +202,9 @@ private:
     math::Vector<3> _y_body;	/**< x-axis of body frame in world coords */
     math::Vector<3> _z_body;	/**< x-axis of body frame in world coords */
     math::Vector<3> _Omg_body;	/**< angular velocity of body frame wrt world, in body frame */
+    
+    /* angular velocity error stored for derivative cacl */
+    math::Vector<3> _omg_err_prev;
     
     /* Nominal states, properties, and inputs */
     math::Vector<3> _pos_nom;		/**< nominal position */
@@ -422,15 +426,18 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     _gains.vel(0) = TRAJ_GAINS_XY_VEL;
     _gains.vel(1) = TRAJ_GAINS_XY_VEL;
     _gains.vel(2) = TRAJ_GAINS_Z_VEL;
+    _gains.ang_int(0) = TRAJ_GAINS_RP_ANG_INT;
+    _gains.ang_int(1) = TRAJ_GAINS_RP_ANG_INT;
+    _gains.ang_int(2) = TRAJ_GAINS_YAW_ANG_INT;
     _gains.ang(0) = TRAJ_GAINS_RP_ANG;
     _gains.ang(1) = TRAJ_GAINS_RP_ANG;
     _gains.ang(2) = TRAJ_GAINS_YAW_ANG;
     _gains.omg(0) = TRAJ_GAINS_RP_OMG;
     _gains.omg(1) = TRAJ_GAINS_RP_OMG;
     _gains.omg(2) = TRAJ_GAINS_YAW_OMG;
-    _gains.ang_int(0) = TRAJ_GAINS_RP_ANG_INT;
-    _gains.ang_int(1) = TRAJ_GAINS_RP_ANG_INT;
-    _gains.ang_int(2) = TRAJ_GAINS_YAW_ANG_INT;
+    _gains.omg_der(0) = TRAJ_GAINS_RP_OMG_DER;
+    _gains.omg_der(1) = TRAJ_GAINS_RP_OMG_DER;
+    _gains.omg_der(2) = TRAJ_GAINS_YAW_OMG_DER;
 
     /* retrieve safety parameters */
     _safe_params.thrust_min = 0.0f;
@@ -463,6 +470,8 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     //~ _R_B2P(0,1) = (float)sin(M_PI_4);
     //~ _R_B2P(1,0) = -(float)sin(M_PI_4);
     //~ _R_B2P(1,1) = (float)cos(M_PI_4);
+    
+    _omg_err_prev.zero();
 
     _pos_nom.zero();
     _vel_nom.zero();
@@ -1118,6 +1127,8 @@ MulticopterTrajectoryControl::trajectory_feedback_controller(float dt)
     ang_err.zero();
     math::Vector<3> omg_err;
     omg_err.zero();
+    math::Vector<3> omg_err_der;
+    omg_err_der.zero();
     
     /* translational corrective input */
     pos_err = _pos_nom - _pos;
@@ -1229,12 +1240,15 @@ MulticopterTrajectoryControl::trajectory_feedback_controller(float dt)
         _att_rates_sp_pub = orb_advertise(ORB_ID(vehicle_rates_setpoint), &_att_rates_sp);
     }
     
-
     /* calculated angular velocity error */
     omg_err = (_R_B2W.transposed())*R_D2W*Omg_des - _Omg_body;
     
+    /* calculate angular velocity error derivative */
+    omg_err_der = (omg_err - _omg_err_prev)/dt;
+    _omg_err_prev = omg_err;
+    
     /* calculate corrective (feedback) moment inputs */
-    _M_cor = ang_err.emult(_gains.ang) + omg_err.emult(_gains.omg) + _ang_err_int;
+    _M_cor = _ang_err_int + ang_err.emult(_gains.ang) + omg_err.emult(_gains.omg) + omg_err_der.emult(_gains.omg_der);
     //~ printf("DEBUG:  _M_cor %d, %d, %d\n", (int)(_M_cor(0)*10000.0f), (int)(_M_cor(1)*10000.0f), (int)(_M_cor(2)*10000.0f));
     
     /* calculate moment inputs */
