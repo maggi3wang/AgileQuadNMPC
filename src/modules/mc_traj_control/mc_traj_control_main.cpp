@@ -170,9 +170,11 @@ private:
         float gim_lock;
         float freefall_thresh;
         math::Vector<3> ang_int_limit;
+        math::Vector<3> pos_int_limit;
     }		_safe_params;
     
     struct {
+		math::Vector<3> pos_int;
         math::Vector<3> pos;
         math::Vector<3> vel;
         math::Vector<3> ang_int;
@@ -225,6 +227,7 @@ private:
     math::Vector<3> _M_cor;			/**< corrective moment expressed in body coords */
     math::Vector<3> _M_sp;			/**< moment setpoint in body coords */
     math::Vector<3>	_att_control;	/**< attitude control vector */
+    math::Vector<3> _pos_err_int;	/**< position error integral */
     math::Vector<3> _ang_err_int;	/**< angular error integral*/
     
     int _n_spline_seg;      /** < number of segments in spline (not max number, necassarily) */
@@ -420,6 +423,9 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     memset(&_ref_pos, 0, sizeof(_ref_pos));
     
     /* retrieve control gains */
+    _gains.pos_int(0) = TRAJ_GAINS_XY_POS_INT;
+    _gains.pos_int(1) = TRAJ_GAINS_XY_POS_INT;
+    _gains.pos_int(2) = TRAJ_GAINS_Z_POS_INT;
     _gains.pos(0) = TRAJ_GAINS_XY_POS;
     _gains.pos(1) = TRAJ_GAINS_XY_POS;
     _gains.pos(2) = TRAJ_GAINS_Z_POS;
@@ -453,6 +459,9 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     }
     _safe_params.gim_lock = TRAJ_PARAMS_GIMBAL_LOCK;
     _safe_params.freefall_thresh = TRAJ_PARAMS_FREEFALL_THRESHOLD;
+    _safe_params.pos_int_limit(0) = TRAJ_PARAMS_XY_INT_LIMIT;
+    _safe_params.pos_int_limit(1) = TRAJ_PARAMS_XY_INT_LIMIT;
+    _safe_params.pos_int_limit(2) = TRAJ_PARAMS_Z_INT_LIMIT;
     _safe_params.ang_int_limit(0) = TRAJ_PARAMS_RP_INT_LIMIT;
     _safe_params.ang_int_limit(1) = TRAJ_PARAMS_RP_INT_LIMIT;
     _safe_params.ang_int_limit(2) = TRAJ_PARAMS_YAW_INT_LIMIT;
@@ -492,6 +501,7 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     _M_sp.zero();
     _att_control.zero();
     _ang_err_int.zero();
+    _pos_err_int.zero();
 
     _n_spline_seg = 0;
     
@@ -812,8 +822,9 @@ MulticopterTrajectoryControl::reset_trajectory()
     _k_thr = 1.0f/(TRAJ_PARAMS_THROTTLE_PER_THRUST*_mass);
     _thr_prev = TRAJ_PARAMS_THROTTLE_PER_THRUST*_mass*GRAV;
     
-    // reset angular error integral
+    // reset angular and position error integrals
     _ang_err_int.zero();
+    _pos_err_int.zero();
         
 }
 
@@ -1130,13 +1141,24 @@ MulticopterTrajectoryControl::trajectory_feedback_controller(float dt)
     math::Vector<3> omg_err_der;
     omg_err_der.zero();
     
-    /* translational corrective input */
+    /* position and velocity error */
     pos_err = _pos_nom - _pos;
     vel_err = _vel_nom - _vel;
-    //~ printf("DEBUG: pos_err %d, %d, %d\n", (int)(pos_err(0)*10000.0f), (int)(pos_err(1)*10000.0f), (int)(pos_err(2)*10000.0f));
-    //~ printf("DEBUG: vel_err %d, %d, %d\n", (int)(vel_err(0)*10000.0f), (int)(vel_err(1)*10000.0f), (int)(vel_err(2)*10000.0f));
     
-    math::Vector<3> F_cor = pos_err.emult(_gains.pos) + vel_err.emult(_gains.vel); 	// corrective force term
+    /* calculate integral position error */
+    for (int i = 0; i < 3; i++){
+		float pei = _pos_err_int(i) + _gains.pos_int(i)*pos_err(i)*dt;
+		
+		if (isfinite(pei) && pei > -_safe_params.pos_int_limit(i) && 
+			pei < _safe_params.pos_int_limit(i)){
+				// note that mc_att_control also checks _M_cor is not greater than integral limit. Not sure why...
+				_pos_err_int(i) = pei;
+		}
+		
+	}
+    
+    /* translational corrective input */
+    math::Vector<3> F_cor = _pos_err_int + pos_err.emult(_gains.pos) + vel_err.emult(_gains.vel); 	// corrective force term
     
     math::Vector<3> F_des = _F_nom + F_cor;	// combined, desired force
     //~ printf("DEBUG: _F_nom %d, %d, %d\n", (int)(_F_nom(0)*10000.0f), (int)(_F_nom(1)*10000.0f), (int)(_F_nom(2)*10000.0f));

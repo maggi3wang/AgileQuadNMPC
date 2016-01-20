@@ -71,6 +71,13 @@
  * @min 0.0
  */
 #define TRAJ_GAINS_YAW_OMG_DER 0.0f
+
+/**
+ * Integral gain for horizontal position error
+ *
+ * @min 0.0
+ */
+#define TRAJ_GAINS_XY_POS_INT 0.5f
  
 /**
  * Proportional gain for horizontal position error
@@ -87,6 +94,13 @@
  */
 //~ #define TRAJ_GAINS_XY_VEL 4.0f
 #define TRAJ_GAINS_XY_VEL 4.0f
+
+/**
+ * Integral gain for vertical position error
+ *
+ * @min 0.0
+ */
+#define TRAJ_GAINS_Z_POS_INT 0.1f
 
 /**
  * Proportional gain for vertical position error
@@ -142,6 +156,20 @@
  * @min 0.0
  */
 #define TRAJ_PARAMS_Z_VEL_MAX 2.0f
+
+/**
+ * Saturation limit for xy position error integrator
+ * 
+ * @unit m*sec (?)
+ */
+ #define TRAJ_PARAMS_XY_INT_LIMIT 10.0f
+ 
+ /**
+ * Saturation limit for xy position error integrator
+ * 
+ * @unit m*sec (?)
+ */
+ #define TRAJ_PARAMS_Z_INT_LIMIT 5.0f
 
 /**
  * Saturation limit for roll, pitch angular error integrator
