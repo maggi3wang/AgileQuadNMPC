@@ -667,7 +667,7 @@ MavlinkReceiver::handle_message_obs_repel_force_ned(mavlink_message_t *msg)
 {
 	/* decode message */
 	mavlink_obs_repel_force_ned_t mav_obs_force;
-	mavlink_obs_repel_force_ned_decode(msg, &mav_obs_force);
+	mavlink_msg_obs_repel_force_ned_decode(msg, &mav_obs_force);
 	
 	/* transfer information to uORB */
 	obs_repel_force_ned_s uorb_obs_force;
