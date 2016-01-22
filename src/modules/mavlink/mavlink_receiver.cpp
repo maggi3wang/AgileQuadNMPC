@@ -120,6 +120,7 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 	_vicon_position_pub(-1),
     _poly_coefs_pub(-1),
     _traj_spline_pub(-1),
+    _obs_force_pub(-1),
 	_vision_position_pub(-1),
 	_telemetry_status_pub(-1),
 	_rc_pub(-1),
@@ -211,6 +212,10 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 		//~ printf("DEBUG: traj seg message recieved\n");
         handle_message_traj_seg(msg);
         break;
+        
+    case MAVLINK_MSG_ID_OBS_REPEL_FORCE_NED:
+		handle_message_obs_repel_force_ned(msg);
+		break;
 
 	case MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED:
 		handle_message_set_position_target_local_ned(msg);
@@ -655,6 +660,31 @@ MavlinkReceiver::handle_message_traj_seg(mavlink_message_t *msg)
         }
     }
     
+}
+
+void
+MavlinkReceiver::handle_message_obs_repel_force_ned(mavlink_message_t *msg)
+{
+	/* decode message */
+	mavlink_obs_repel_force_ned_t mav_obs_force;
+	mavlink_obs_repel_force_ned_decode(msg, &mav_obs_force);
+	
+	/* transfer information to uORB */
+	obs_repel_force_ned_s uorb_obs_force;
+	memset(&uorb_obs_force, 0, sizeof(uorb_obs_force));
+	
+	uorb_obs_force.Fx = mav_obs_force.Fx;
+	uorb_obs_force.Fy = mav_obs_force.Fy;
+	uorb_obs_force.Fz = mav_obs_force.Fz;
+	
+	/* advertise or publish topic */
+	if (_obs_force_pub < 0) {
+		_obs_force_pub = orb_advertise(ORB_ID(obs_repel_force_ned), &uorb_obs_force);
+
+	} else {
+		orb_publish(ORB_ID(obs_repel_force_ned), _obs_force_pub, &uorb_obs_force);
+	}
+	
 }
 
 void

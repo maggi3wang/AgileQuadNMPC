@@ -53,6 +53,7 @@
 #include "topics/vehicle_attitude_setpoint.h"
 #include "topics/vehicle_rates_setpoint.h"
 #include "topics/trajectory_spline.h"   // added by Ross Allen
+#include "topics/obs_repel_force_ned.h"
 
 namespace uORB
 {
@@ -103,5 +104,6 @@ template class __EXPORT Subscription<vehicle_local_position_s>;
 template class __EXPORT Subscription<vehicle_attitude_setpoint_s>;
 template class __EXPORT Subscription<vehicle_rates_setpoint_s>;
 template class __EXPORT Subscription<trajectory_spline_s>;  // added by Ross Allen
+template class __EXPORT Subscription<obs_repel_force_ned_s>;
 
 } // namespace uORB

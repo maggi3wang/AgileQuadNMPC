@@ -75,6 +75,7 @@
 #include <uORB/topics/battery_status.h>
 #include <uORB/topics/vehicle_force_setpoint.h>
 #include <uORB/topics/trajectory_spline.h>
+#include <uORB/topics/obs_repel_force_ned.h>
 
 #include "mavlink_ftp.h"
 
@@ -122,6 +123,7 @@ private:
 	void handle_message_vicon_position_estimate(mavlink_message_t *msg, bool incoming_data);
     void handle_message_poly_coefs(mavlink_message_t *msg);
     void handle_message_traj_seg(mavlink_message_t *msg);
+    void handle_message_obs_repel_force_ned(mavlink_message_t *msg);
 	void handle_message_vision_position_estimate(mavlink_message_t *msg);
 	void handle_message_quad_swarm_roll_pitch_yaw_thrust(mavlink_message_t *msg);
 	void handle_message_set_position_target_local_ned(mavlink_message_t *msg);
@@ -162,6 +164,7 @@ private:
 	orb_advert_t _vicon_position_pub;
     orb_advert_t _poly_coefs_pub;
     orb_advert_t _traj_spline_pub;
+    orb_advert_t _obs_force_pub;
 	orb_advert_t _vision_position_pub;
 	orb_advert_t _telemetry_status_pub;
 	orb_advert_t _rc_pub;
