@@ -80,6 +80,7 @@
 #include <uORB/topics/vehicle_global_velocity_setpoint.h>
 #include <uORB/topics/vehicle_velocity_feed_forward.h>
 #include <uORB/topics/trajectory_nominal_values.h>
+#include <uORB/topics/obstacle_repulsive_force_ned.h>
 #include <uORB/topics/optical_flow.h>
 #include <uORB/topics/battery_status.h>
 #include <uORB/topics/differential_pressure.h>
@@ -969,6 +970,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 		struct wind_estimate_s wind_estimate;
         struct vehicle_velocity_feed_forward_s vel_ff;
         struct trajectory_nominal_values_s traj_nom;
+        struct obstacle_repulsive_force_ned_s obs_force
 	} buf;
 
 	memset(&buf, 0, sizeof(buf));
@@ -1013,6 +1015,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 			struct log_WIND_s log_WIND;
             struct log_VELF_s log_VELF;
             struct log_TRJN_s log_TRJN;
+            struct log_OBSF_s log_OBSF;
 		} body;
 	} log_msg = {
 		LOG_PACKET_HEADER_INIT(0)
@@ -1052,6 +1055,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 		int wind_sub;
         int vel_ff_sub;
         int traj_nom_sub;
+        int obs_force_sub;
 	} subs;
 
 	subs.cmd_sub = -1;
@@ -1079,6 +1083,7 @@ int sdlog2_thread_main(int argc, char *argv[])
     subs.vel_ff_sub = -1;
     //~ warnx("DEBUG002: subscription complete");
     subs.traj_nom_sub = -1;
+    subs.obs_force_sub = -1;
 	subs.battery_sub = -1;
 	for (unsigned i = 0; i < TELEMETRY_STATUS_ORB_ID_NUM; i++) {
 		subs.telemetry_subs[i] = -1;
@@ -1611,6 +1616,15 @@ int sdlog2_thread_main(int argc, char *argv[])
 			log_msg.body.log_TRJN.My = buf.traj_nom.My;
 			log_msg.body.log_TRJN.Mz = buf.traj_nom.Mz;
 			LOGBUFFER_WRITE_AND_COUNT(TRJN);
+		}
+		
+		/* --- OBSTACLE REPULSIVE FORCE --- */
+		if (copy_if_updated(ORB_ID(obstacle_repulsive_force_ned), &subs.obs_force_sub, &buf.obs_force)) {
+			log_msg.msg_type = LOG_OBSF_MSG;
+			log_msg.body.log_OBSF.x = buf.obs_force.Fx;
+			log_msg.body.log_OBSF.y = buf.obs_force.Fy;
+			log_msg.body.log_OBSF.z = buf.obs_force.Fz;
+			LOGBUFFER_WRITE_AND_COUNT(OBSF);
 		}
 
 		/* --- BATTERY --- */

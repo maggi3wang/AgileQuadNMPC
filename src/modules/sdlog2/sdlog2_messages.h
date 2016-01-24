@@ -294,6 +294,14 @@ struct log_TRJN_s {
     float Mz;
 };
 
+/* --- OBSF - Obstacle repulsive force in NED coords--- */
+#define LOG_OBSF_MSG 42
+struct log_OBSF_s {
+	float x;
+	float y;
+	float z;
+};
+
 /* --- BATT - BATTERY --- */
 #define LOG_BATT_MSG 20
 struct log_BATT_s {
@@ -487,7 +495,8 @@ static const struct log_format_s log_formats[] = {
 	LOG_FORMAT(ESC, "HBBBHHffiffH",		"count,nESC,Conn,N,Ver,Adr,Volt,Amp,RPM,Temp,SetP,SetPRAW"),
 	LOG_FORMAT(GVSP, "fff",			"VX,VY,VZ"),
     LOG_FORMAT(VELF, "fff",			"VX,VY,VZ"),    // Added by Ross Allen
-    LOG_FORMAT(TRJN, "ffffffffffffffff",	"X,Y,Z,VX,VY,VZ,PHI,THETA,PSI,P,Q,R,THRUST,MX,MY,MZ"),
+    LOG_FORMAT(TRJN, "ffffffffffffffff",	"X,Y,Z,VX,VY,VZ,Roll,Pitch,Yaw,RollRate,PitchRate,YawRate,Thrust,MX,MY,MZ"),
+    LOG_FORMAT(OBSF, "fff",	"X,Y,Z"),
 	LOG_FORMAT(BATT, "ffff",		"V,VFilt,C,Discharged"),
 	LOG_FORMAT(DIST, "ffB",			"Bottom,BottomRate,Flags"),
 	LOG_FORMAT_S(TEL0, TEL, "BBBBHHBQ",		"RSSI,RemRSSI,Noise,RemNoise,RXErr,Fixed,TXBuf,HbTime"),
