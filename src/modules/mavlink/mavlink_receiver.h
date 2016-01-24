@@ -75,7 +75,7 @@
 #include <uORB/topics/battery_status.h>
 #include <uORB/topics/vehicle_force_setpoint.h>
 #include <uORB/topics/trajectory_spline.h>
-#include <uORB/topics/obs_repel_force_ned.h>
+#include <uORB/topics/obstacle_repulsive_force_ned.h>
 
 #include "mavlink_ftp.h"
 

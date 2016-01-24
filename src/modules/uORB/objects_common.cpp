@@ -121,8 +121,8 @@ ORB_DEFINE(poly_coefs, struct poly_coefs_s);
 #include "topics/trajectory_spline.h"
 ORB_DEFINE(trajectory_spline, struct trajectory_spline_s);
 
-#include "topics/obs_repel_force_ned.h"
-ORB_DEFINE(obs_repel_force_ned, struct obs_repel_force_ned_s);
+#include "topics/obstacle_repulsive_force_ned.h"
+ORB_DEFINE(obstacle_repulsive_force_ned, struct obstacle_repulsive_force_ned_s);
 
 #include "topics/vehicle_rates_setpoint.h"
 ORB_DEFINE(vehicle_rates_setpoint, struct vehicle_rates_setpoint_s);

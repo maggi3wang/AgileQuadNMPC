@@ -68,6 +68,7 @@
 #include <uORB/topics/trajectory_spline.h>
 #include <uORB/topics/actuator_controls.h>
 #include <uORB/topics/sensor_combined.h>
+#include <uORB/topics/obstacle_repulsive_force_ned.h>
 #include <systemlib/param/param.h>
 #include <systemlib/err.h>
 #include <systemlib/systemlib.h>
@@ -90,6 +91,8 @@
 #define GRAV 	9.81f
 
 #define ZERO_GAIN_THRESHOLD 0.000001f
+
+#define OBS_FORCE_TIMEOUT 250000
 
 // TODO remove these later when I have an estimator for m and inertia
 #define MASS_TEMP 0.9574f
@@ -139,6 +142,7 @@ private:
     int		_local_pos_sub;			/**< vehicle local position */
     int     _traj_spline_sub;       /**< trajectory spline */
     int		_sensor_combined_sub;	/**< sensor data */
+    int		_obs_force_sub;			/**< repulsive force from obstacles in world coords*/
 
     orb_advert_t	_att_sp_pub;			/**< attitude setpoint publication */
     orb_advert_t	_att_rates_sp_pub;		/**< attitude rates setpoint publication */
@@ -158,6 +162,7 @@ private:
     struct trajectory_spline_s  		_traj_spline;   /**< trajectory spline */
     struct actuator_controls_s			_actuators;		/**< actuator controls */
     struct trajectory_nominal_values_s	_traj_nom;		/**< nominal trajectory values */
+    struct obstacle_repulsive_force_ned_s	_obs_force;		/**< repulsive force imposed due to obstacle proximity and relative velocity */
     struct sensor_combined_s 			_sensor;		/**< sensor data */ 
 
 
@@ -186,11 +191,13 @@ private:
     struct map_projection_reference_s _ref_pos;
     float _ref_alt;
     hrt_abstime _ref_timestamp;
+    hrt_abstime _t_last_obs_force;
 
     bool _reset_pos_nom;
     bool _reset_alt_nom;
     bool _reset_psi_nom;
     bool _control_trajectory_started;
+    bool _obs_force_timed_out;
     
     //NOTE: ELIMINATE VARIABLES THAT ARE PASSED AROUND 
     
@@ -285,7 +292,7 @@ private:
     /**
      * Check for changes in subscribed topics.
      */
-    void		poll_subscriptions();
+    void		poll_subscriptions(hrt_abstime t);
 
     /**
      * Update reference for local position projection
@@ -391,6 +398,7 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     _local_pos_sub(-1),
     _traj_spline_sub(-1),
     _sensor_combined_sub(-1),
+    _obs_force_sub(-1),
 
 /* publications */
     _att_sp_pub(-1),
@@ -402,10 +410,12 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 
     _ref_alt(0.0f),
     _ref_timestamp(0),
+    _t_last_obs_force(0),
 
     _reset_pos_nom(true),
     _reset_alt_nom(true),
-    _reset_psi_nom(true)
+    _reset_psi_nom(true),
+    _obs_force_timed_out(false)
 {
     memset(&_att, 0, sizeof(_att));
     memset(&_att_sp, 0, sizeof(_att_sp));
@@ -419,6 +429,7 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     memset(&_actuators, 0, sizeof(_actuators));
     memset(&_traj_nom, 0, sizeof(_traj_nom));
     memset(&_sensor, 0, sizeof(_sensor));
+    memset(&_obs_force, 0, sizeof(_obs_force));
 
     memset(&_ref_pos, 0, sizeof(_ref_pos));
     
@@ -538,7 +549,7 @@ MulticopterTrajectoryControl::~MulticopterTrajectoryControl()
 }
 
 void
-MulticopterTrajectoryControl::poll_subscriptions()
+MulticopterTrajectoryControl::poll_subscriptions(hrt_abstime t)
 {
     bool updated;
 
@@ -603,6 +614,20 @@ MulticopterTrajectoryControl::poll_subscriptions()
         orb_copy(ORB_ID(trajectory_spline), _traj_spline_sub, &_traj_spline);
         _control_trajectory_started = false;
     }
+    
+    orb_check(_obs_force_sub, &updated);
+    
+    if (updated) {
+		orb_copy(ORB_ID(obstacle_repulsive_force_ned), _obs_force_sub, &_obs_force);
+		_t_last_obs_force = t;
+		_obs_force_timed_out = false;
+	} else {
+		// Check for topic timeout
+		if (!_obs_force_timed_out && t > _t_last_obs_force + OBS_FORCE_TIMEOUT) {
+			memset(&_obs_force, 0, sizeof(_obs_force));
+			_obs_force_timed_out = true;
+		}
+	}
     
     orb_check(_sensor_combined_sub, &updated);
     
@@ -821,6 +846,7 @@ MulticopterTrajectoryControl::reset_trajectory()
     _att_control.zero();
     _k_thr = 1.0f/(TRAJ_PARAMS_THROTTLE_PER_THRUST*_mass);
     _thr_prev = TRAJ_PARAMS_THROTTLE_PER_THRUST*_mass*GRAV;
+    memset(&_obs_force, 0, sizeof(_obs_force));
     
     // reset angular and position error integrals
     _ang_err_int.zero();
@@ -1160,7 +1186,13 @@ MulticopterTrajectoryControl::trajectory_feedback_controller(float dt)
     /* translational corrective input */
     math::Vector<3> F_cor = _pos_err_int + pos_err.emult(_gains.pos) + vel_err.emult(_gains.vel); 	// corrective force term
     
-    math::Vector<3> F_des = _F_nom + F_cor;	// combined, desired force
+    /* obstacle repulsive input */
+    math::Vector<3> F_rep;
+    F_rep(0) = _obs_force.Fx;
+    F_rep(0) = _obs_force.Fy;
+    F_rep(0) = _obs_force.Fz;
+    
+    math::Vector<3> F_des = _F_nom + F_cor + F_rep;	// combined, desired force
     //~ printf("DEBUG: _F_nom %d, %d, %d\n", (int)(_F_nom(0)*10000.0f), (int)(_F_nom(1)*10000.0f), (int)(_F_nom(2)*10000.0f));
     //~ printf("DEBUG: F_cor %d, %d, %d\n", (int)(F_cor(0)*10000.0f), (int)(F_cor(1)*10000.0f), (int)(F_cor(2)*10000.0f));
     //~ printf("DEBUG: F_des %d, %d, %d\n", (int)(F_des(0)*10000.0f), (int)(F_des(1)*10000.0f), (int)(F_des(2)*10000.0f));
@@ -1293,13 +1325,14 @@ MulticopterTrajectoryControl::task_main()
     _arming_sub = orb_subscribe(ORB_ID(actuator_armed));
     _local_pos_sub = orb_subscribe(ORB_ID(vehicle_local_position));
     _traj_spline_sub = orb_subscribe(ORB_ID(trajectory_spline));
+    _obs_force_sub = orb_subscribe(ORB_ID(obstacle_repulsive_force_ned));
 
 
     /* initialize values of critical structs until first regular update */
     _arming.armed = false;
 
     /* get an initial update for all sensor and status data */
-    poll_subscriptions();
+    poll_subscriptions(hrt_absolute_time());
 
     bool was_armed = false;
     _control_trajectory_started = false;
@@ -1351,13 +1384,15 @@ MulticopterTrajectoryControl::task_main()
             continue;
         }
 
-        poll_subscriptions();
-
+		/* timing variables */
         hrt_abstime t = hrt_absolute_time();
         float t_sec = ((float)t)*0.000001f;
         static uint64_t last_run = 0;
 		float dt = (hrt_absolute_time() - last_run) / 1000000.0f;
 		last_run = hrt_absolute_time();
+
+		/* poll uORB topics */
+		poll_subscriptions(t);
 
 		/* guard against too small (< 2ms) and too large (> 20ms) dt's */
 		if (dt < 0.002f) {

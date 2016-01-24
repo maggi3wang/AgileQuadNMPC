@@ -670,7 +670,7 @@ MavlinkReceiver::handle_message_obs_repel_force_ned(mavlink_message_t *msg)
 	mavlink_msg_obs_repel_force_ned_decode(msg, &mav_obs_force);
 	
 	/* transfer information to uORB */
-	obs_repel_force_ned_s uorb_obs_force;
+	obstacle_repulsive_force_ned_s uorb_obs_force;
 	memset(&uorb_obs_force, 0, sizeof(uorb_obs_force));
 	
 	uorb_obs_force.Fx = mav_obs_force.Fx;
@@ -679,10 +679,10 @@ MavlinkReceiver::handle_message_obs_repel_force_ned(mavlink_message_t *msg)
 	
 	/* advertise or publish topic */
 	if (_obs_force_pub < 0) {
-		_obs_force_pub = orb_advertise(ORB_ID(obs_repel_force_ned), &uorb_obs_force);
+		_obs_force_pub = orb_advertise(ORB_ID(obstacle_repulsive_force_ned), &uorb_obs_force);
 
 	} else {
-		orb_publish(ORB_ID(obs_repel_force_ned), _obs_force_pub, &uorb_obs_force);
+		orb_publish(ORB_ID(obstacle_repulsive_force_ned), _obs_force_pub, &uorb_obs_force);
 	}
 	
 }
