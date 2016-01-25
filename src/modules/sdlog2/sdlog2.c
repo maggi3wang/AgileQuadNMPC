@@ -970,7 +970,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 		struct wind_estimate_s wind_estimate;
         struct vehicle_velocity_feed_forward_s vel_ff;
         struct trajectory_nominal_values_s traj_nom;
-        struct obstacle_repulsive_force_ned_s obs_force
+        struct obstacle_repulsive_force_ned_s obs_force;
 	} buf;
 
 	memset(&buf, 0, sizeof(buf));

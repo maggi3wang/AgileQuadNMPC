@@ -495,7 +495,7 @@ static const struct log_format_s log_formats[] = {
 	LOG_FORMAT(ESC, "HBBBHHffiffH",		"count,nESC,Conn,N,Ver,Adr,Volt,Amp,RPM,Temp,SetP,SetPRAW"),
 	LOG_FORMAT(GVSP, "fff",			"VX,VY,VZ"),
     LOG_FORMAT(VELF, "fff",			"VX,VY,VZ"),    // Added by Ross Allen
-    LOG_FORMAT(TRJN, "ffffffffffffffff",	"X,Y,Z,VX,VY,VZ,Roll,Pitch,Yaw,RollRate,PitchRate,YawRate,Thrust,MX,MY,MZ"),
+    LOG_FORMAT(TRJN, "ffffffffffffffff",	"X,Y,Z,VX,VY,VZ,Roll,Pitch,Yaw,RollR,PitchR,YawR,Thrust,MX,MY,MZ"),
     LOG_FORMAT(OBSF, "fff",	"X,Y,Z"),
 	LOG_FORMAT(BATT, "ffff",		"V,VFilt,C,Discharged"),
 	LOG_FORMAT(DIST, "ffB",			"Bottom,BottomRate,Flags"),

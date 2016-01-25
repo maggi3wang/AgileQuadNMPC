@@ -87,6 +87,7 @@ __END_DECLS
 
 
 #define VICON_TOPIC_TIMEOUT 500000  // Vicon times out after 0.5s
+#define OBS_FORCE_TOPIC_TIMEOUT 250000
 #define N_POLY_COEFS 10     // number of coefficients per polynomial spline segment
 #define MAX_TIMESTAMP_SAMPLES 100
 
@@ -132,7 +133,9 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 	_hil_local_alt0(0.0f),
 	_hil_local_proj_ref{},
     _t_last_vicon_received(0),
+    _t_last_obs_force_received(0),
     _vicon_timed_out(true),
+    _obs_force_timed_out(true),
     _n_time_samples(0),
     _mean_vts_offset(0.0f),     // mean of vicon timestamp offset from vicon sent to pixhawk recieved
     _M2(0.0f),
@@ -214,7 +217,9 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
         break;
         
     case MAVLINK_MSG_ID_OBS_REPEL_FORCE_NED:
-		handle_message_obs_repel_force_ned(msg);
+		_obs_force_timed_out = false;
+		_t_last_obs_force_received = hrt_absolute_time();
+		handle_message_obs_repel_force_ned(msg, true);
 		break;
 
 	case MAVLINK_MSG_ID_SET_POSITION_TARGET_LOCAL_NED:
@@ -663,19 +668,26 @@ MavlinkReceiver::handle_message_traj_seg(mavlink_message_t *msg)
 }
 
 void
-MavlinkReceiver::handle_message_obs_repel_force_ned(mavlink_message_t *msg)
+MavlinkReceiver::handle_message_obs_repel_force_ned(mavlink_message_t *msg, bool incoming_data)
 {
-	/* decode message */
-	mavlink_obs_repel_force_ned_t mav_obs_force;
-	mavlink_msg_obs_repel_force_ned_decode(msg, &mav_obs_force);
 	
 	/* transfer information to uORB */
 	obstacle_repulsive_force_ned_s uorb_obs_force;
 	memset(&uorb_obs_force, 0, sizeof(uorb_obs_force));
 	
-	uorb_obs_force.Fx = mav_obs_force.Fx;
-	uorb_obs_force.Fy = mav_obs_force.Fy;
-	uorb_obs_force.Fz = mav_obs_force.Fz;
+	if (incoming_data){
+		/* new data, update struct for uORB topic */
+		/* decode message */
+		mavlink_obs_repel_force_ned_t mav_obs_force;
+		mavlink_msg_obs_repel_force_ned_decode(msg, &mav_obs_force);
+			
+		uorb_obs_force.Fx = mav_obs_force.Fx;
+		uorb_obs_force.Fy = mav_obs_force.Fy;
+		uorb_obs_force.Fz = mav_obs_force.Fz;		
+	}
+	// else, do nothing and pass zeros for the obstacle force
+	
+	//~ printf("DEBUG: obs_force Fx = %d, Fy = %d, Fz = %d\n", (int)(1000.0f*uorb_obs_force.Fx), (int)(1000.0f*uorb_obs_force.Fy), (int)(1000.0f*uorb_obs_force.Fz));
 	
 	/* advertise or publish topic */
 	if (_obs_force_pub < 0) {
@@ -1577,6 +1589,12 @@ MavlinkReceiver::receive_thread(void *arg)
             mavlink_message_t empty_msg;
             handle_message_vicon_position_estimate(&empty_msg, false);
 			warnx("VICON timeout");
+		}
+		
+		if(!_obs_force_timed_out && (t_cur > (_t_last_obs_force_received + OBS_FORCE_TOPIC_TIMEOUT))) {
+			_obs_force_timed_out = true;
+			mavlink_message_t empty_msg;
+			handle_message_obs_repel_force_ned(&empty_msg, false);
 		}
 	}
 

@@ -24,7 +24,7 @@
  */
 
 struct obstacle_repulsive_force_ned_s {
-	uint64_t timestamp;		/**< in microseconds since system start, is set whenever the writing thread stores new data */
+	//uint64_t timestamp;		/**< in microseconds since system start, is set whenever the writing thread stores new data */
 	
 	float Fx;			/**< [m] x-axis repulsive force in world NED coords */
 	float Fy;			/**< [m] y-axis repulsive force in world NED coords */

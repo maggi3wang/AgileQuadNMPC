@@ -123,7 +123,7 @@ private:
 	void handle_message_vicon_position_estimate(mavlink_message_t *msg, bool incoming_data);
     void handle_message_poly_coefs(mavlink_message_t *msg);
     void handle_message_traj_seg(mavlink_message_t *msg);
-    void handle_message_obs_repel_force_ned(mavlink_message_t *msg);
+    void handle_message_obs_repel_force_ned(mavlink_message_t *msg, bool incoming_data);
 	void handle_message_vision_position_estimate(mavlink_message_t *msg);
 	void handle_message_quad_swarm_roll_pitch_yaw_thrust(mavlink_message_t *msg);
 	void handle_message_set_position_target_local_ned(mavlink_message_t *msg);
@@ -176,7 +176,9 @@ private:
 	float _hil_local_alt0;
 	struct map_projection_reference_s _hil_local_proj_ref;
     uint64_t _t_last_vicon_received;
+    uint64_t _t_last_obs_force_received;
     bool _vicon_timed_out;
+    bool _obs_force_timed_out;
     uint64_t _n_time_samples;
     float _mean_vts_offset;
     float _M2;

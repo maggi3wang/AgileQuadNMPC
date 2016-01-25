@@ -92,8 +92,6 @@
 
 #define ZERO_GAIN_THRESHOLD 0.000001f
 
-#define OBS_FORCE_TIMEOUT 250000
-
 // TODO remove these later when I have an estimator for m and inertia
 #define MASS_TEMP 0.9574f
 //~ #define XY_INERTIA_TEMP 0.0018f
@@ -191,13 +189,13 @@ private:
     struct map_projection_reference_s _ref_pos;
     float _ref_alt;
     hrt_abstime _ref_timestamp;
-    hrt_abstime _t_last_obs_force;
+    //~ hrt_abstime _t_last_obs_force;
 
     bool _reset_pos_nom;
     bool _reset_alt_nom;
     bool _reset_psi_nom;
     bool _control_trajectory_started;
-    bool _obs_force_timed_out;
+    //~ bool _obs_force_timed_out;
     
     //NOTE: ELIMINATE VARIABLES THAT ARE PASSED AROUND 
     
@@ -410,12 +408,11 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
 
     _ref_alt(0.0f),
     _ref_timestamp(0),
-    _t_last_obs_force(0),
+    //~ _t_last_obs_force(0),
 
     _reset_pos_nom(true),
     _reset_alt_nom(true),
-    _reset_psi_nom(true),
-    _obs_force_timed_out(false)
+    _reset_psi_nom(true)
 {
     memset(&_att, 0, sizeof(_att));
     memset(&_att_sp, 0, sizeof(_att_sp));
@@ -619,15 +616,16 @@ MulticopterTrajectoryControl::poll_subscriptions(hrt_abstime t)
     
     if (updated) {
 		orb_copy(ORB_ID(obstacle_repulsive_force_ned), _obs_force_sub, &_obs_force);
-		_t_last_obs_force = t;
-		_obs_force_timed_out = false;
-	} else {
-		// Check for topic timeout
-		if (!_obs_force_timed_out && t > _t_last_obs_force + OBS_FORCE_TIMEOUT) {
-			memset(&_obs_force, 0, sizeof(_obs_force));
-			_obs_force_timed_out = true;
-		}
+		//~ _t_last_obs_force = t;
+		//~ _obs_force_timed_out = false;
 	}
+	//~ } else {
+		//~ // Check for topic timeout
+		//~ if (!_obs_force_timed_out && t > _t_last_obs_force + OBS_FORCE_TIMEOUT) {
+			//~ memset(&_obs_force, 0, sizeof(_obs_force));
+			//~ _obs_force_timed_out = true;
+		//~ }
+	//~ }
     
     orb_check(_sensor_combined_sub, &updated);
     
@@ -1189,8 +1187,9 @@ MulticopterTrajectoryControl::trajectory_feedback_controller(float dt)
     /* obstacle repulsive input */
     math::Vector<3> F_rep;
     F_rep(0) = _obs_force.Fx;
-    F_rep(0) = _obs_force.Fy;
-    F_rep(0) = _obs_force.Fz;
+    F_rep(1) = _obs_force.Fy;
+    F_rep(2) = _obs_force.Fz;
+    //~ printf("DEBUG: obs_force Fx = %d, Fy = %d, Fz = %d\n", (int)(1000.0f*F_rep(0)), (int)(1000.0f*F_rep(1)), (int)(1000.0f*F_rep(2)));
     
     math::Vector<3> F_des = _F_nom + F_cor + F_rep;	// combined, desired force
     //~ printf("DEBUG: _F_nom %d, %d, %d\n", (int)(_F_nom(0)*10000.0f), (int)(_F_nom(1)*10000.0f), (int)(_F_nom(2)*10000.0f));
