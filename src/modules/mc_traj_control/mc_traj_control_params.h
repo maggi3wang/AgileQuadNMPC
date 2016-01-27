@@ -77,7 +77,8 @@
  *
  * @min 0.0
  */
-#define TRAJ_GAINS_XY_POS_INT 0.5f
+//~ #define TRAJ_GAINS_XY_POS_INT 0.5f
+#define TRAJ_GAINS_XY_POS_INT 0.0f
  
 /**
  * Proportional gain for horizontal position error
