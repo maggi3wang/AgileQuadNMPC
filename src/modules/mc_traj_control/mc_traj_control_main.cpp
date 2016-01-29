@@ -100,6 +100,11 @@
 #define Y_INERTIA_EST 0.00565f
 #define Z_INERTIA_EST 0.1185f
 
+// Trim bias for F330 converted from Sumeet's work
+#define ATTC_ROLL_BIAS 0.025f
+#define ATTC_PITCH_BIAS -0.009f
+#define ATTC_YAW_BIAS 0.045f
+
 /**
  * Multicopter position control app start / stop handling function
  *
@@ -1589,6 +1594,11 @@ MulticopterTrajectoryControl::task_main()
             } else {
                 _global_vel_sp_pub = orb_advertise(ORB_ID(vehicle_global_velocity_setpoint), &_global_vel_sp);
             }
+            
+            /* add trim bias values (empirical determined) */
+            _actuators.control[0] += ATTC_ROLL_BIAS;
+            _actuators.control[1] += ATTC_PITCH_BIAS;
+            _actuators.control[2] += ATTC_YAW_BIAS;
              
 
             /* publish actuator controls */
