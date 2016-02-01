@@ -86,7 +86,7 @@
  * @min 0.0
  */
 //~ #define TRAJ_GAINS_XY_POS 2.0f
-#define TRAJ_GAINS_XY_POS 2.0f
+#define TRAJ_GAINS_XY_POS 4.0f
 
 /**
  * Proportional gain for horizontal velocity error
