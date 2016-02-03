@@ -102,8 +102,9 @@
 
 // Trim bias for F330 converted from Sumeet's work
 #define ATTC_ROLL_BIAS 0.025f
+//~ #define ATTC_ROLL_BIAS 0.05f
 #define ATTC_PITCH_BIAS -0.009f
-#define ATTC_YAW_BIAS 0.045f
+#define ATTC_YAW_BIAS 0.02f
 
 /**
  * Multicopter position control app start / stop handling function
