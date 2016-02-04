@@ -101,8 +101,8 @@
 #define Z_INERTIA_EST 0.1185f
 
 // Trim bias for F330 converted from Sumeet's work
-#define ATTC_ROLL_BIAS 0.025f
-//~ #define ATTC_ROLL_BIAS 0.05f
+//#define ATTC_ROLL_BIAS 0.025f
+#define ATTC_ROLL_BIAS 0.05f
 #define ATTC_PITCH_BIAS -0.009f
 #define ATTC_YAW_BIAS 0.02f
 
@@ -186,6 +186,7 @@ private:
 		math::Vector<3> pos_int;
         math::Vector<3> pos;
         math::Vector<3> vel;
+        math::Vector<3> vel_der;
         math::Vector<3> ang_int;
         math::Vector<3> ang;
         math::Vector<3> omg;
@@ -216,8 +217,11 @@ private:
     math::Vector<3> _z_body;	/**< x-axis of body frame in world coords */
     math::Vector<3> _Omg_body;	/**< angular velocity of body frame wrt world, in body frame */
     
-    /* angular velocity error stored for derivative cacl */
-    math::Vector<3> _omg_err_prev;
+    /* error terms for integral and derivative control */
+    math::Vector<3> _omg_err_prev;  /**< angular velocity previous error */
+    math::Vector<3> _pos_err_int;	/**< position error integral */
+    math::Vector<3> _ang_err_int;	/**< angular error integral*/
+    math::Vector<3> _vel_err_prev;  /**< velocity previous error */
     
     /* Nominal states, properties, and inputs */
     math::Vector<3> _pos_nom;		/**< nominal position */
@@ -238,8 +242,6 @@ private:
     math::Vector<3> _M_cor;			/**< corrective moment expressed in body coords */
     math::Vector<3> _M_sp;			/**< moment setpoint in body coords */
     math::Vector<3>	_att_control;	/**< attitude control vector */
-    math::Vector<3> _pos_err_int;	/**< position error integral */
-    math::Vector<3> _ang_err_int;	/**< angular error integral*/
     
     int _n_spline_seg;      /** < number of segments in spline (not max number, necassarily) */
     
@@ -446,6 +448,9 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     _gains.vel(0) = TRAJ_GAINS_XY_VEL;
     _gains.vel(1) = TRAJ_GAINS_XY_VEL;
     _gains.vel(2) = TRAJ_GAINS_Z_VEL;
+    _gains.vel_der(0) = TRAJ_GAINS_XY_VEL_DER;
+    _gains.vel_der(1) = TRAJ_GAINS_XY_VEL_DER;
+    _gains.vel_der(2) = TRAJ_GAINS_Z_VEL_DER;
     _gains.ang_int(0) = TRAJ_GAINS_RP_ANG_INT;
     _gains.ang_int(1) = TRAJ_GAINS_RP_ANG_INT;
     _gains.ang_int(2) = TRAJ_GAINS_YAW_ANG_INT;
@@ -495,6 +500,9 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     //~ _R_B2P(1,1) = (float)cos(M_PI_4);
     
     _omg_err_prev.zero();
+    _ang_err_int.zero();
+    _pos_err_int.zero();
+    _vel_err_prev.zero();
 
     _pos_nom.zero();
     _vel_nom.zero();
@@ -514,8 +522,6 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     _M_cor.zero();
     _M_sp.zero();
     _att_control.zero();
-    _ang_err_int.zero();
-    _pos_err_int.zero();
 
     _n_spline_seg = 0;
     
@@ -853,8 +859,10 @@ MulticopterTrajectoryControl::reset_trajectory()
     memset(&_obs_force, 0, sizeof(_obs_force));
     
     // reset angular and position error integrals
+    _omg_err_prev.zero();
     _ang_err_int.zero();
     _pos_err_int.zero();
+    _vel_err_prev.zero();
         
 }
 
@@ -1164,6 +1172,8 @@ MulticopterTrajectoryControl::trajectory_feedback_controller(float dt)
     pos_err.zero();
     math::Vector<3> vel_err;
     vel_err.zero();
+    math::Vector<3> vel_err_der;
+    vel_err_der.zero();
     math::Vector<3> ang_err;
     ang_err.zero();
     math::Vector<3> omg_err;
@@ -1186,9 +1196,13 @@ MulticopterTrajectoryControl::trajectory_feedback_controller(float dt)
 		}
 		
 	}
+	
+	/* calculate velocity error derivative */
+    vel_err_der = (vel_err - _vel_err_prev)/dt;
+    _vel_err_prev = vel_err;
     
     /* translational corrective input */
-    math::Vector<3> F_cor = _pos_err_int + pos_err.emult(_gains.pos) + vel_err.emult(_gains.vel); 	// corrective force term
+    math::Vector<3> F_cor = _pos_err_int + pos_err.emult(_gains.pos) + vel_err.emult(_gains.vel) + vel_err_der.emult(_gains.vel_der); 	// corrective force term
     
     /* obstacle repulsive input */
     math::Vector<3> F_rep;

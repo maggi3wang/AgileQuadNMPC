@@ -97,6 +97,13 @@
 #define TRAJ_GAINS_XY_VEL 4.0f
 
 /**
+ * Derivative gain for horizontal velocity error
+ *
+ * @min 0.0
+ */
+#define TRAJ_GAINS_XY_VEL_DER 0.0f
+
+/**
  * Integral gain for vertical position error
  *
  * @min 0.0
@@ -118,6 +125,13 @@
  */
 //~ #define TRAJ_GAINS_Z_VEL 3.0f
 #define TRAJ_GAINS_Z_VEL 3.0f
+
+/**
+ * Derivative gain for vertical velocity error
+ *
+ * @min 0.0
+ */
+#define TRAJ_GAINS_Z_VEL_DER 3.0f
 
 /**
  * Minimum thrust
