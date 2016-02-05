@@ -131,7 +131,7 @@
  *
  * @min 0.0
  */
-#define TRAJ_GAINS_Z_VEL_DER 3.0f
+#define TRAJ_GAINS_Z_VEL_DER 0.0f
 
 /**
  * Minimum thrust
