@@ -102,9 +102,9 @@
 
 // Trim bias for F330 converted from Sumeet's work
 //#define ATTC_ROLL_BIAS 0.025f
-#define ATTC_ROLL_BIAS 0.05f
-#define ATTC_PITCH_BIAS -0.009f
-#define ATTC_YAW_BIAS 0.02f
+#define ATTC_ROLL_BIAS 0.015f
+#define ATTC_PITCH_BIAS -0.013f
+#define ATTC_YAW_BIAS 0.06f
 
 /**
  * Multicopter position control app start / stop handling function
@@ -213,8 +213,8 @@ private:
     //~ math::Matrix<3, 3> _R_P2W;	/**< rotation matrix from PX4 body frame to world coords (axes bisect quad arms)*/
     //~ math::Matrix<3, 3> _R_B2P;	/**< rotation matrix from body frame to PX4 body frame (const)*/
     math::Vector<3> _x_body;	/**< x-axis of body frame in world coords */
-    math::Vector<3> _y_body;	/**< x-axis of body frame in world coords */
-    math::Vector<3> _z_body;	/**< x-axis of body frame in world coords */
+    math::Vector<3> _y_body;	/**< y-axis of body frame in world coords */
+    math::Vector<3> _z_body;	/**< z-axis of body frame in world coords */
     math::Vector<3> _Omg_body;	/**< angular velocity of body frame wrt world, in body frame */
     
     /* error terms for integral and derivative control */
@@ -1611,9 +1611,9 @@ MulticopterTrajectoryControl::task_main()
             }
             
             /* add trim bias values (empirical determined) */
-            _actuators.control[0] += ATTC_ROLL_BIAS;
-            _actuators.control[1] += ATTC_PITCH_BIAS;
-            _actuators.control[2] += ATTC_YAW_BIAS;
+            _att_control(0) += ATTC_ROLL_BIAS;
+            _att_control(1) += ATTC_PITCH_BIAS;
+            _att_control(2) += ATTC_YAW_BIAS;
              
 
             /* publish actuator controls */
