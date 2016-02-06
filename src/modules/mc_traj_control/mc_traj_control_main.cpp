@@ -85,7 +85,8 @@
 #define ASL_LAB_CENTER_Z    -1.5f
 #define ASL_LAB_CENTER_YAW  -1.68f
 
-#define SPLINE_START_DELAY 5000000
+//~ #define SPLINE_START_DELAY 5000000
+#define SPLINE_START_DELAY 0
 #define N_POLY_COEFS    10
 
 #define GRAV 	9.81f
@@ -94,6 +95,7 @@
 
 // TODO remove these later when I have an estimator for m and inertia
 #define MASS_TEMP 0.9574f
+//~ #define XY_INERTIA_TEMP 0.0018f
 //~ #define XY_INERTIA_TEMP 0.0018f
 //~ #define Z_INERTIA_TEMP 0.0037f
 #define X_INERTIA_EST 0.00484f
@@ -619,7 +621,6 @@ MulticopterTrajectoryControl::poll_subscriptions(hrt_abstime t)
     orb_check(_traj_spline_sub, &updated);
     
     if (updated) {
-        printf("DEBUG: trajectory recieved\n");
         orb_copy(ORB_ID(trajectory_spline), _traj_spline_sub, &_traj_spline);
         _control_trajectory_started = false;
     }
@@ -1212,9 +1213,6 @@ MulticopterTrajectoryControl::trajectory_feedback_controller(float dt)
     //~ printf("DEBUG: obs_force Fx = %d, Fy = %d, Fz = %d\n", (int)(1000.0f*F_rep(0)), (int)(1000.0f*F_rep(1)), (int)(1000.0f*F_rep(2)));
     
     math::Vector<3> F_des = _F_nom + F_cor + F_rep;	// combined, desired force
-    //~ printf("DEBUG: _F_nom %d, %d, %d\n", (int)(_F_nom(0)*10000.0f), (int)(_F_nom(1)*10000.0f), (int)(_F_nom(2)*10000.0f));
-    //~ printf("DEBUG: F_cor %d, %d, %d\n", (int)(F_cor(0)*10000.0f), (int)(F_cor(1)*10000.0f), (int)(F_cor(2)*10000.0f));
-    //~ printf("DEBUG: F_des %d, %d, %d\n", (int)(F_des(0)*10000.0f), (int)(F_des(1)*10000.0f), (int)(F_des(2)*10000.0f));
     
     /* map corrective force to input thrust, desired orientation, and desired angular velocity */
     math::Matrix<3, 3> R_D2W;	R_D2W.zero();	// rotation matrix from desired body frame to world */
@@ -1251,7 +1249,6 @@ MulticopterTrajectoryControl::trajectory_feedback_controller(float dt)
     }
     
     /* calculate angular error */
-    //~ printf("DEBUG: _att.R_valid = %d\n", _att.R_valid);
     ang_err = vee_map((_R_B2W.transposed())*R_D2W - (R_D2W.transposed())*_R_B2W)*0.5f;
     //~ math::Vector<3> temp_ang = _R_B2W.to_euler();
     //~ math::Vector<3> temp_angSP = R_D2W.to_euler();

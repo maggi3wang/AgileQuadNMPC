@@ -18,7 +18,7 @@
 
 #include "../uORB.h"
 
-#define MAX_TRAJ_SEGS 10
+#define MAX_TRAJ_SEGS 15
 
 /**
  * @addtogroup topics
