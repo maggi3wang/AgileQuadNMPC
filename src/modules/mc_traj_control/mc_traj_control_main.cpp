@@ -85,8 +85,10 @@
 #define ASL_LAB_CENTER_Z    -1.5f
 #define ASL_LAB_CENTER_YAW  -1.68f
 
+// Spline initiation (positive value gives a delay for testing safety, 
+// negative values retroactively sets start time to account for MPC iteration time
 //~ #define SPLINE_START_DELAY 5000000
-#define SPLINE_START_DELAY 0
+#define SPLINE_START_DELAY -300000
 #define N_POLY_COEFS    10
 
 #define GRAV 	9.81f
