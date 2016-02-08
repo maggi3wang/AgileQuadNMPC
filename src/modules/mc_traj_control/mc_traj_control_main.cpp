@@ -1265,10 +1265,10 @@ MulticopterTrajectoryControl::dual_trajectory_transition_nominal_state(
 	float z_cur = poly_eval(_z_coefs.at(cur_seg), cur_poly_t);
 	float psi_prev = poly_eval(_prev_yaw_coefs.at(prev_seg), prev_poly_t);
 	float psi_cur = poly_eval(_yaw_coefs.at(cur_seg), cur_poly_t);
-	_pos_nom(0) = tau*x_cur + (1.0f-tau)*x_prev;
-	_pos_nom(1) = tau*y_cur + (1.0f-tau)*y_prev;
-	_pos_nom(2) = tau*z_cur + (1.0f-tau)*z_prev;
-	_psi_nom = tau*psi_cur + (1.0f-tau)*psi_prev;
+	_pos_nom(0) = tau*(x_cur - x_prev) + x_prev;
+	_pos_nom(1) = tau*(y_cur - y_prev) + y_prev;
+	_pos_nom(2) = tau*(z_cur - z_prev) + z_prev;
+	_psi_nom = tau*(psi_cur - psi_prev) + psi_prev;
 	
 	// nominal velocity
 	float xv_prev = poly_eval(_prev_xv_coefs.at(prev_seg), prev_poly_t);
@@ -1279,10 +1279,14 @@ MulticopterTrajectoryControl::dual_trajectory_transition_nominal_state(
 	float zv_cur = poly_eval(_zv_coefs.at(cur_seg), cur_poly_t);
 	float psi1_prev = poly_eval(_prev_yaw1_coefs.at(prev_seg), prev_poly_t);
 	float psi1_cur = poly_eval(_yaw1_coefs.at(cur_seg), cur_poly_t);
-	_vel_nom(0) = 1.0f*(x_cur-x_prev)/SPLINE_TRANS_T_SEC_REL + tau*(xv_cur-xv_prev) + xv_prev;
-	_vel_nom(1) = 1.0f*(y_cur-y_prev)/SPLINE_TRANS_T_SEC_REL + tau*(yv_cur-yv_prev) + yv_prev;
-	_vel_nom(2) = 1.0f*(z_cur-z_prev)/SPLINE_TRANS_T_SEC_REL + tau*(zv_cur-zv_prev) + zv_prev;
-	_psi1_nom = 1.0f*(psi_cur-psi_prev)/SPLINE_TRANS_T_SEC_REL + tau*(psi1_cur-psi1_prev) + psi1_prev;
+	_vel_nom(0) = tau*(xv_cur - xv_prev) + xv_prev;
+	_vel_nom(1) = tau*(yv_cur - yv_prev) + yv_prev;
+	_vel_nom(2) = tau*(zv_cur - zv_prev) + zv_prev;
+	_psi1_nom = tau*(psi1_cur - psi1_prev) + psi1_prev;
+	//~ _vel_nom(0) = 1.0f*(x_cur-x_prev)/SPLINE_TRANS_T_SEC_REL + tau*(xv_cur-xv_prev) + xv_prev;
+	//~ _vel_nom(1) = 1.0f*(y_cur-y_prev)/SPLINE_TRANS_T_SEC_REL + tau*(yv_cur-yv_prev) + yv_prev;
+	//~ _vel_nom(2) = 1.0f*(z_cur-z_prev)/SPLINE_TRANS_T_SEC_REL + tau*(zv_cur-zv_prev) + zv_prev;
+	//~ _psi1_nom = 1.0f*(psi_cur-psi_prev)/SPLINE_TRANS_T_SEC_REL + tau*(psi1_cur-psi1_prev) + psi1_prev;
 	
 	// nominal acceleration
 	float xa_prev = poly_eval(_prev_xa_coefs.at(prev_seg), prev_poly_t);
@@ -1293,10 +1297,14 @@ MulticopterTrajectoryControl::dual_trajectory_transition_nominal_state(
 	float za_cur = poly_eval(_za_coefs.at(cur_seg), cur_poly_t);
 	float psi2_prev = poly_eval(_prev_yaw2_coefs.at(prev_seg), prev_poly_t);
 	float psi2_cur = poly_eval(_yaw2_coefs.at(cur_seg), cur_poly_t);
-	_acc_nom(0) = 2.0f*(xv_cur-xv_prev)/SPLINE_TRANS_T_SEC_REL + tau*(xa_cur-xa_prev) + xa_prev;
-	_acc_nom(1) = 2.0f*(yv_cur-yv_prev)/SPLINE_TRANS_T_SEC_REL + tau*(ya_cur-ya_prev) + ya_prev;
-	_acc_nom(2) = 2.0f*(zv_cur-zv_prev)/SPLINE_TRANS_T_SEC_REL + tau*(za_cur-za_prev) + za_prev;
-	_psi2_nom = 2.0f*(psi1_cur-psi1_prev)/SPLINE_TRANS_T_SEC_REL + tau*(psi2_cur-psi2_prev) + psi2_prev;
+	_acc_nom(0) = tau*(xa_cur - xa_prev) + xa_prev;
+	_acc_nom(1) = tau*(ya_cur - ya_prev) + ya_prev;
+	_acc_nom(2) = tau*(za_cur - za_prev) + za_prev;
+	_psi2_nom = tau*(psi2_cur - psi2_prev) + psi2_prev;
+	//~ _acc_nom(0) = 2.0f*(xv_cur-xv_prev)/SPLINE_TRANS_T_SEC_REL + tau*(xa_cur-xa_prev) + xa_prev;
+	//~ _acc_nom(1) = 2.0f*(yv_cur-yv_prev)/SPLINE_TRANS_T_SEC_REL + tau*(ya_cur-ya_prev) + ya_prev;
+	//~ _acc_nom(2) = 2.0f*(zv_cur-zv_prev)/SPLINE_TRANS_T_SEC_REL + tau*(za_cur-za_prev) + za_prev;
+	//~ _psi2_nom = 2.0f*(psi1_cur-psi1_prev)/SPLINE_TRANS_T_SEC_REL + tau*(psi2_cur-psi2_prev) + psi2_prev;
 
 	// nominal jerk
 	float xj_prev = poly_eval(_prev_xj_coefs.at(prev_seg), prev_poly_t);
@@ -1305,9 +1313,12 @@ MulticopterTrajectoryControl::dual_trajectory_transition_nominal_state(
 	float yj_cur = poly_eval(_yj_coefs.at(cur_seg), cur_poly_t);
 	float zj_prev = poly_eval(_prev_zj_coefs.at(prev_seg), prev_poly_t);
 	float zj_cur = poly_eval(_zj_coefs.at(cur_seg), cur_poly_t);
-	_jerk_nom(0) = 3.0f*(xa_cur-xa_prev)/SPLINE_TRANS_T_SEC_REL + tau*(xj_cur-xj_prev) + xj_prev;
-	_jerk_nom(1) = 3.0f*(ya_cur-ya_prev)/SPLINE_TRANS_T_SEC_REL + tau*(yj_cur-yj_prev) + yj_prev;
-	_jerk_nom(2) = 3.0f*(za_cur-za_prev)/SPLINE_TRANS_T_SEC_REL + tau*(zj_cur-zj_prev) + zj_prev;
+	_jerk_nom(0) = tau*(xj_cur - xj_prev) + xj_prev;
+	_jerk_nom(1) = tau*(yj_cur - yj_prev) + yj_prev;
+	_jerk_nom(2) = tau*(zj_cur - zj_prev) + zj_prev;
+	//~ _jerk_nom(0) = 3.0f*(xa_cur-xa_prev)/SPLINE_TRANS_T_SEC_REL + tau*(xj_cur-xj_prev) + xj_prev;
+	//~ _jerk_nom(1) = 3.0f*(ya_cur-ya_prev)/SPLINE_TRANS_T_SEC_REL + tau*(yj_cur-yj_prev) + yj_prev;
+	//~ _jerk_nom(2) = 3.0f*(za_cur-za_prev)/SPLINE_TRANS_T_SEC_REL + tau*(zj_cur-zj_prev) + zj_prev;
 	
 	// nominal snap
 	float xs_prev = poly_eval(_prev_xs_coefs.at(prev_seg), prev_poly_t);
@@ -1316,9 +1327,12 @@ MulticopterTrajectoryControl::dual_trajectory_transition_nominal_state(
 	float ys_cur = poly_eval(_ys_coefs.at(cur_seg), cur_poly_t);
 	float zs_prev = poly_eval(_prev_zs_coefs.at(prev_seg), prev_poly_t);
 	float zs_cur = poly_eval(_zs_coefs.at(cur_seg), cur_poly_t);
-	_snap_nom(0) = 4.0f*(xj_cur-xj_prev)/SPLINE_TRANS_T_SEC_REL + tau*(xs_cur-xs_prev) + xs_prev;
-	_snap_nom(1) = 4.0f*(yj_cur-yj_prev)/SPLINE_TRANS_T_SEC_REL + tau*(ys_cur-ys_prev) + ys_prev;
-	_snap_nom(2) = 4.0f*(zj_cur-zj_prev)/SPLINE_TRANS_T_SEC_REL + tau*(zs_cur-zs_prev) + zs_prev;
+	_snap_nom(0) = tau*(xs_cur - xs_prev) + xs_prev;
+	_snap_nom(1) = tau*(ys_cur - ys_prev) + ys_prev;
+	_snap_nom(2) = tau*(zs_cur - zs_prev) + zs_prev;
+	//~ _snap_nom(0) = 4.0f*(xj_cur-xj_prev)/SPLINE_TRANS_T_SEC_REL + tau*(xs_cur-xs_prev) + xs_prev;
+	//~ _snap_nom(1) = 4.0f*(yj_cur-yj_prev)/SPLINE_TRANS_T_SEC_REL + tau*(ys_cur-ys_prev) + ys_prev;
+	//~ _snap_nom(2) = 4.0f*(zj_cur-zj_prev)/SPLINE_TRANS_T_SEC_REL + tau*(zs_cur-zs_prev) + zs_prev;
 	
 	// nominal force in world frame (eqn 16)
 	_F_nom = _acc_nom*_mass - z_W*(_mass*GRAV);
