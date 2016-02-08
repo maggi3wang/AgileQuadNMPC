@@ -89,6 +89,11 @@
 // negative values retroactively sets start time to account for MPC iteration time
 //~ #define SPLINE_START_DELAY 5000000
 #define SPLINE_START_DELAY 0
+
+// Spline transitions time. NOTE: This should be less than the MPC
+// horizon time in the planning software for proper performance
+#define SPLINE_TRANS_T_SEC_REL 0.5f
+
 #define N_POLY_COEFS    10
 #define _MICRO_ 0.000001f
 #define GRAV 	9.81f
@@ -257,67 +262,8 @@ private:
     float _k_thr;			/**< scaling factor for F/m = _k_thr*throttle */
     float _alpha;			/**< exponential decay weight for low pass filter */
     float _thr_prev;		/**< previous value of throttle input */
-    
-    // time vectors
-    std::vector<float> _spline_delt_sec; // time step sizes for each segment
-    std::vector<float> _spline_cumt_sec; // cumulative time markers for each segment
-    std::vector<float> _prev_spline_delt_sec;
-    std::vector<float> _prev_spline_cumt_sec;
 
-    /* define vector of appropriate size for trajectory spline polynomials */
-    // position 
-    std::vector< std::vector<float> > _x_coefs;
-    std::vector< std::vector<float> > _y_coefs;
-    std::vector< std::vector<float> > _z_coefs;
-    std::vector< std::vector<float> > _prev_x_coefs;
-    std::vector< std::vector<float> > _prev_y_coefs;
-    std::vector< std::vector<float> > _prev_z_coefs;
     
-    // velocity
-    std::vector< std::vector<float> > _xv_coefs;
-    std::vector< std::vector<float> > _yv_coefs;
-    std::vector< std::vector<float> > _zv_coefs;
-    std::vector< std::vector<float> > _prev_xv_coefs;
-    std::vector< std::vector<float> > _prev_yv_coefs;
-    std::vector< std::vector<float> > _prev_zv_coefs;
-    
-    // acceleration
-    std::vector< std::vector<float> > _xa_coefs;
-    std::vector< std::vector<float> > _ya_coefs;
-    std::vector< std::vector<float> > _za_coefs;
-    std::vector< std::vector<float> > _prev_xa_coefs;
-    std::vector< std::vector<float> > _prev_ya_coefs;
-    std::vector< std::vector<float> > _prev_za_coefs;
-    
-    // jerk
-    std::vector< std::vector<float> > _xj_coefs;
-    std::vector< std::vector<float> > _yj_coefs;
-    std::vector< std::vector<float> > _zj_coefs;
-    std::vector< std::vector<float> > _prev_xj_coefs;
-    std::vector< std::vector<float> > _prev_yj_coefs;
-    std::vector< std::vector<float> > _prev_zj_coefs;
-    
-    // snap
-    std::vector< std::vector<float> > _xs_coefs;
-    std::vector< std::vector<float> > _ys_coefs;
-    std::vector< std::vector<float> > _zs_coefs;
-    std::vector< std::vector<float> > _prev_xs_coefs;
-    std::vector< std::vector<float> > _prev_ys_coefs;
-    std::vector< std::vector<float> > _prev_zs_coefs;
-    
-    // yaw and yaw derivatives
-    std::vector< std::vector<float> > _yaw_coefs;
-    std::vector< std::vector<float> > _yaw1_coefs;
-    std::vector< std::vector<float> > _yaw2_coefs;
-    std::vector< std::vector<float> > _prev_yaw_coefs;
-    std::vector< std::vector<float> > _prev_yaw1_coefs;
-    std::vector< std::vector<float> > _prev_yaw2_coefs;
-    
-
-    /**
-     * Update control outputs
-     */
-    void		control_update();
 
     /**
      * Check for changes in subscribed topics.
@@ -375,7 +321,26 @@ private:
     /**
      * Set position setpoint using trajectory control - Ross Allen
      */
-    void        trajectory_nominal_state(float cur_spline_t, float spline_term_t, int cur_seg, float cur_poly_t, float poly_term_t);
+    void        trajectory_nominal_state(
+					float cur_spline_t, float spline_term_t, int cur_seg, float cur_poly_t, float poly_term_t,
+					const std::vector<std::vector<float>>& x_coefs,
+					const std::vector<std::vector<float>>& y_coefs,
+					const std::vector<std::vector<float>>& z_coefs,
+					const std::vector<std::vector<float>>& xv_coefs,
+					const std::vector<std::vector<float>>& yv_coefs,
+					const std::vector<std::vector<float>>& zv_coefs,
+					const std::vector<std::vector<float>>& xa_coefs,
+					const std::vector<std::vector<float>>& ya_coefs,
+					const std::vector<std::vector<float>>& za_coefs,
+					const std::vector<std::vector<float>>& xj_coefs,
+					const std::vector<std::vector<float>>& yj_coefs,
+					const std::vector<std::vector<float>>& zj_coefs,
+					const std::vector<std::vector<float>>& xs_coefs,
+					const std::vector<std::vector<float>>& ys_coefs,
+					const std::vector<std::vector<float>>& zs_coefs,
+					const std::vector<std::vector<float>>& yaw_coefs,
+					const std::vector<std::vector<float>>& yaw1_coefs,
+					const std::vector<std::vector<float>>& yaw2_coefs);
     void		trajectory_feedback_controller(float dt);
     void        reset_trajectory();
     void		hold_position();
@@ -1036,6 +1001,8 @@ std::vector< std::vector<float> >& deriv) {
 void
 MulticopterTrajectoryControl::hold_position()
 {
+	
+	printf("DEBUG004\n");
     // reset position and alt if necessary
     reset_pos_nom();
     reset_alt_nom();
@@ -1116,7 +1083,25 @@ MulticopterTrajectoryControl::force_orientation_mapping(
 /* Calculate the nominal state variables for the trajectory at the current time */
 void
 MulticopterTrajectoryControl::trajectory_nominal_state(
-	float cur_spline_t, float spline_term_t, int cur_seg, float cur_poly_t, float poly_term_t)
+	float cur_spline_t, float spline_term_t, int cur_seg, float cur_poly_t, float poly_term_t,
+	const std::vector<std::vector<float>>& x_coefs,
+	const std::vector<std::vector<float>>& y_coefs,
+	const std::vector<std::vector<float>>& z_coefs,
+	const std::vector<std::vector<float>>& xv_coefs,
+	const std::vector<std::vector<float>>& yv_coefs,
+	const std::vector<std::vector<float>>& zv_coefs,
+	const std::vector<std::vector<float>>& xa_coefs,
+	const std::vector<std::vector<float>>& ya_coefs,
+	const std::vector<std::vector<float>>& za_coefs,
+	const std::vector<std::vector<float>>& xj_coefs,
+	const std::vector<std::vector<float>>& yj_coefs,
+	const std::vector<std::vector<float>>& zj_coefs,
+	const std::vector<std::vector<float>>& xs_coefs,
+	const std::vector<std::vector<float>>& ys_coefs,
+	const std::vector<std::vector<float>>& zs_coefs,
+	const std::vector<std::vector<float>>& yaw_coefs,
+	const std::vector<std::vector<float>>& yaw1_coefs,
+	const std::vector<std::vector<float>>& yaw2_coefs)
 {
        
     // local variables
@@ -1134,10 +1119,10 @@ MulticopterTrajectoryControl::trajectory_nominal_state(
     
     if (cur_spline_t <= 0) {
         
-        _pos_nom(0) = poly_eval(_x_coefs.at(0), 0.0f);
-        _pos_nom(1) = poly_eval(_y_coefs.at(0), 0.0f);
-        _pos_nom(2) = poly_eval(_z_coefs.at(0), 0.0f);
-        _psi_nom = poly_eval(_yaw_coefs.at(0), 0.0f);
+        _pos_nom(0) = poly_eval(x_coefs.at(0), 0.0f);
+        _pos_nom(1) = poly_eval(y_coefs.at(0), 0.0f);
+        _pos_nom(2) = poly_eval(z_coefs.at(0), 0.0f);
+        _psi_nom = poly_eval(yaw_coefs.at(0), 0.0f);
         
         _reset_pos_nom = false;
         _reset_alt_nom = false;
@@ -1148,32 +1133,32 @@ MulticopterTrajectoryControl::trajectory_nominal_state(
     } else if (cur_spline_t > 0 && cur_spline_t < spline_term_t) {
     
         // nominal position
-        _pos_nom(0) = poly_eval(_x_coefs.at(cur_seg), cur_poly_t);
-        _pos_nom(1) = poly_eval(_y_coefs.at(cur_seg), cur_poly_t);
-        _pos_nom(2) = poly_eval(_z_coefs.at(cur_seg), cur_poly_t);
-        _psi_nom = poly_eval(_yaw_coefs.at(cur_seg), cur_poly_t);
+        _pos_nom(0) = poly_eval(x_coefs.at(cur_seg), cur_poly_t);
+        _pos_nom(1) = poly_eval(y_coefs.at(cur_seg), cur_poly_t);
+        _pos_nom(2) = poly_eval(z_coefs.at(cur_seg), cur_poly_t);
+        _psi_nom = poly_eval(yaw_coefs.at(cur_seg), cur_poly_t);
         
         // nominal velocity
-        _vel_nom(0) = poly_eval(_xv_coefs.at(cur_seg), cur_poly_t);
-        _vel_nom(1) = poly_eval(_yv_coefs.at(cur_seg), cur_poly_t);
-        _vel_nom(2) = poly_eval(_zv_coefs.at(cur_seg), cur_poly_t);
-        _psi1_nom = poly_eval(_yaw1_coefs.at(cur_seg), cur_poly_t);
+        _vel_nom(0) = poly_eval(xv_coefs.at(cur_seg), cur_poly_t);
+        _vel_nom(1) = poly_eval(yv_coefs.at(cur_seg), cur_poly_t);
+        _vel_nom(2) = poly_eval(zv_coefs.at(cur_seg), cur_poly_t);
+        _psi1_nom = poly_eval(yaw1_coefs.at(cur_seg), cur_poly_t);
         
         // nominal acceleration
-        _acc_nom(0) = poly_eval(_xa_coefs.at(cur_seg), cur_poly_t);
-        _acc_nom(1) = poly_eval(_ya_coefs.at(cur_seg), cur_poly_t);
-        _acc_nom(2) = poly_eval(_za_coefs.at(cur_seg), cur_poly_t);
-        _psi2_nom = poly_eval(_yaw2_coefs.at(cur_seg), cur_poly_t);
+        _acc_nom(0) = poly_eval(xa_coefs.at(cur_seg), cur_poly_t);
+        _acc_nom(1) = poly_eval(ya_coefs.at(cur_seg), cur_poly_t);
+        _acc_nom(2) = poly_eval(za_coefs.at(cur_seg), cur_poly_t);
+        _psi2_nom = poly_eval(yaw2_coefs.at(cur_seg), cur_poly_t);
     
         // nominal jerk
-        _jerk_nom(0) = poly_eval(_xj_coefs.at(cur_seg), cur_poly_t);
-        _jerk_nom(1) = poly_eval(_yj_coefs.at(cur_seg), cur_poly_t);
-        _jerk_nom(2) = poly_eval(_zj_coefs.at(cur_seg), cur_poly_t);
+        _jerk_nom(0) = poly_eval(xj_coefs.at(cur_seg), cur_poly_t);
+        _jerk_nom(1) = poly_eval(yj_coefs.at(cur_seg), cur_poly_t);
+        _jerk_nom(2) = poly_eval(zj_coefs.at(cur_seg), cur_poly_t);
         
         // nominal snap
-        _snap_nom(0) = poly_eval(_xs_coefs.at(cur_seg), cur_poly_t);
-        _snap_nom(1) = poly_eval(_ys_coefs.at(cur_seg), cur_poly_t);
-        _snap_nom(2) = poly_eval(_zs_coefs.at(cur_seg), cur_poly_t);
+        _snap_nom(0) = poly_eval(xs_coefs.at(cur_seg), cur_poly_t);
+        _snap_nom(1) = poly_eval(ys_coefs.at(cur_seg), cur_poly_t);
+        _snap_nom(2) = poly_eval(zs_coefs.at(cur_seg), cur_poly_t);
         
         // nominal force in world frame (eqn 16)
         _F_nom = _acc_nom*_mass - z_W*(_mass*GRAV);
@@ -1205,10 +1190,10 @@ MulticopterTrajectoryControl::trajectory_nominal_state(
                 
     } else {
         
-        _pos_nom(0) = poly_eval(_x_coefs.at(_x_coefs.size()-1), poly_term_t);
-        _pos_nom(1) = poly_eval(_y_coefs.at(_y_coefs.size()-1), poly_term_t);
-        _pos_nom(2) = poly_eval(_z_coefs.at(_z_coefs.size()-1), poly_term_t);
-        _psi_nom = poly_eval(_yaw_coefs.at(_yaw_coefs.size()-1), poly_term_t);
+        _pos_nom(0) = poly_eval(x_coefs.at(x_coefs.size()-1), poly_term_t);
+        _pos_nom(1) = poly_eval(y_coefs.at(y_coefs.size()-1), poly_term_t);
+        _pos_nom(2) = poly_eval(z_coefs.at(z_coefs.size()-1), poly_term_t);
+        _psi_nom = poly_eval(yaw_coefs.at(yaw_coefs.size()-1), poly_term_t);
         
         _reset_pos_nom = false;
         _reset_alt_nom = false;
@@ -1282,26 +1267,26 @@ MulticopterTrajectoryControl::trajectory_nominal_state(
 	//~ _psi_nom = tau*poly_eval(yaw_2_coefs.at(cur_seg_2), poly_t_2) + (1.0+tau)*poly_eval(yaw_1_coefs.at(cur_seg_1), poly_t_1);
 //~ 
 	//~ // nominal velocity
-	//~ _vel_nom(0) = poly_eval(_xv_coefs.at(cur_seg), poly_t_1);
-	//~ _vel_nom(1) = poly_eval(_yv_coefs.at(cur_seg), poly_t_1);
-	//~ _vel_nom(2) = poly_eval(_zv_coefs.at(cur_seg), poly_t_1);
-	//~ _psi1_nom = poly_eval(_yaw1_coefs.at(cur_seg), poly_t_1);
+	//~ _vel_nom(0) = poly_eval(xv_coefs.at(cur_seg), poly_t_1);
+	//~ _vel_nom(1) = poly_eval(yv_coefs.at(cur_seg), poly_t_1);
+	//~ _vel_nom(2) = poly_eval(zv_coefs.at(cur_seg), poly_t_1);
+	//~ _psi1_nom = poly_eval(yaw1_coefs.at(cur_seg), poly_t_1);
 //~ 
 	//~ // nominal acceleration
-	//~ _acc_nom(0) = poly_eval(_xa_coefs.at(cur_seg), poly_t_1);
-	//~ _acc_nom(1) = poly_eval(_ya_coefs.at(cur_seg), poly_t_1);
-	//~ _acc_nom(2) = poly_eval(_za_coefs.at(cur_seg), poly_t_1);
-	//~ _psi2_nom = poly_eval(_yaw2_coefs.at(cur_seg), poly_t_1);
+	//~ _acc_nom(0) = poly_eval(xa_coefs.at(cur_seg), poly_t_1);
+	//~ _acc_nom(1) = poly_eval(ya_coefs.at(cur_seg), poly_t_1);
+	//~ _acc_nom(2) = poly_eval(za_coefs.at(cur_seg), poly_t_1);
+	//~ _psi2_nom = poly_eval(yaw2_coefs.at(cur_seg), poly_t_1);
 //~ 
 	//~ // nominal jerk
-	//~ _jerk_nom(0) = poly_eval(_xj_coefs.at(cur_seg), poly_t_1);
-	//~ _jerk_nom(1) = poly_eval(_yj_coefs.at(cur_seg), poly_t_1);
-	//~ _jerk_nom(2) = poly_eval(_zj_coefs.at(cur_seg), poly_t_1);
+	//~ _jerk_nom(0) = poly_eval(xj_coefs.at(cur_seg), poly_t_1);
+	//~ _jerk_nom(1) = poly_eval(yj_coefs.at(cur_seg), poly_t_1);
+	//~ _jerk_nom(2) = poly_eval(zj_coefs.at(cur_seg), poly_t_1);
 //~ 
 	//~ // nominal snap
-	//~ _snap_nom(0) = poly_eval(_xs_coefs.at(cur_seg), poly_t_1);
-	//~ _snap_nom(1) = poly_eval(_ys_coefs.at(cur_seg), poly_t_1);
-	//~ _snap_nom(2) = poly_eval(_zs_coefs.at(cur_seg), poly_t_1);
+	//~ _snap_nom(0) = poly_eval(xs_coefs.at(cur_seg), poly_t_1);
+	//~ _snap_nom(1) = poly_eval(ys_coefs.at(cur_seg), poly_t_1);
+	//~ _snap_nom(2) = poly_eval(zs_coefs.at(cur_seg), poly_t_1);
 //~ 
 	//~ // nominal force in world frame (eqn 16)
 	//~ _F_nom = _acc_nom*_mass - z_W*(_mass*GRAV);
@@ -1531,8 +1516,115 @@ MulticopterTrajectoryControl::task_main()
     typedef std::vector<float>::size_type vecf_sz;
     typedef std::vector< std::vector<float> >::size_type vecf2d_sz;
     
-    // time vector
-    float spline_start_time_sec;
+    /***************** DECLARED REUSED VARIABLES *****************/
+    /* define vector of appropriate size for trajectory spline polynomials */
+    // position 
+    printf("DEBUG001\n");
+    std::vector< std::vector<float> > x_coefs;
+    std::vector< std::vector<float> > y_coefs;
+    std::vector< std::vector<float> > z_coefs;
+    std::vector< std::vector<float> > prev_x_coefs;
+    std::vector< std::vector<float> > prev_y_coefs;
+    std::vector< std::vector<float> > prev_z_coefs;
+    printf("DEBUG002\n");
+    
+    // velocity
+    std::vector< std::vector<float> > xv_coefs;
+    std::vector< std::vector<float> > yv_coefs;
+    std::vector< std::vector<float> > zv_coefs;
+    std::vector< std::vector<float> > prev_xv_coefs;
+    std::vector< std::vector<float> > prev_yv_coefs;
+    std::vector< std::vector<float> > prev_zv_coefs;
+    
+    // acceleration
+    std::vector< std::vector<float> > xa_coefs;
+    std::vector< std::vector<float> > ya_coefs;
+    std::vector< std::vector<float> > za_coefs;
+    std::vector< std::vector<float> > prev_xa_coefs;
+    std::vector< std::vector<float> > prev_ya_coefs;
+    std::vector< std::vector<float> > prev_za_coefs;
+    
+    // jerk
+    std::vector< std::vector<float> > xj_coefs;
+    std::vector< std::vector<float> > yj_coefs;
+    std::vector< std::vector<float> > zj_coefs;
+    std::vector< std::vector<float> > prev_xj_coefs;
+    std::vector< std::vector<float> > prev_yj_coefs;
+    std::vector< std::vector<float> > prev_zj_coefs;
+    
+    // snap
+    std::vector< std::vector<float> > xs_coefs;
+    std::vector< std::vector<float> > ys_coefs;
+    std::vector< std::vector<float> > zs_coefs;
+    std::vector< std::vector<float> > prev_xs_coefs;
+    std::vector< std::vector<float> > prev_ys_coefs;
+    std::vector< std::vector<float> > prev_zs_coefs;
+    
+    // yaw and yaw derivatives
+    std::vector< std::vector<float> > yaw_coefs;
+    std::vector< std::vector<float> > yaw1_coefs;
+    std::vector< std::vector<float> > yaw2_coefs;
+    std::vector< std::vector<float> > prev_yaw_coefs;
+    std::vector< std::vector<float> > prev_yaw1_coefs;
+    std::vector< std::vector<float> > prev_yaw2_coefs;
+    //~ printf("DEBUG001\n");
+    //~ std::vector< std::vector<float> > x_coefs (1, std::vector<float> (0.0, N_POLY_COEFS));
+    //~ std::vector< std::vector<float> > y_coefs (1, std::vector<float> (0.0, N_POLY_COEFS));
+    //~ std::vector< std::vector<float> > z_coefs (1, std::vector<float> (0.0, N_POLY_COEFS));
+    //~ std::vector< std::vector<float> > prev_x_coefs (1, std::vector<float> (0.0, N_POLY_COEFS));
+    //~ std::vector< std::vector<float> > prev_y_coefs (1, std::vector<float> (0.0, N_POLY_COEFS));
+    //~ std::vector< std::vector<float> > prev_z_coefs (1, std::vector<float> (0.0, N_POLY_COEFS));
+    //~ printf("DEBUG002\n");
+    //~ 
+    //~ // velocity
+    //~ std::vector< std::vector<float> > xv_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-1));
+    //~ std::vector< std::vector<float> > yv_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-1));
+    //~ std::vector< std::vector<float> > zv_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-1));
+    //~ std::vector< std::vector<float> > prev_xv_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-1));
+    //~ std::vector< std::vector<float> > prev_yv_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-1));
+    //~ std::vector< std::vector<float> > prev_zv_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-1));
+    //~ 
+    //~ // acceleration
+    //~ std::vector< std::vector<float> > xa_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-2));
+    //~ std::vector< std::vector<float> > ya_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-2));
+    //~ std::vector< std::vector<float> > za_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-2));
+    //~ std::vector< std::vector<float> > prev_xa_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-2));
+    //~ std::vector< std::vector<float> > prev_ya_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-2));
+    //~ std::vector< std::vector<float> > prev_za_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-2));
+    //~ 
+    //~ // jerk
+    //~ std::vector< std::vector<float> > xj_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-3));
+    //~ std::vector< std::vector<float> > yj_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-3));
+    //~ std::vector< std::vector<float> > zj_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-3));
+    //~ std::vector< std::vector<float> > prev_xj_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-3));
+    //~ std::vector< std::vector<float> > prev_yj_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-3));
+    //~ std::vector< std::vector<float> > prev_zj_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-3));
+    //~ 
+    //~ // snap
+    //~ std::vector< std::vector<float> > xs_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-4));
+    //~ std::vector< std::vector<float> > ys_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-4));
+    //~ std::vector< std::vector<float> > zs_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-4));
+    //~ std::vector< std::vector<float> > prev_xs_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-4));
+    //~ std::vector< std::vector<float> > prev_ys_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-4));
+    //~ std::vector< std::vector<float> > prev_zs_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-4));
+    //~ 
+    //~ // yaw and yaw derivatives
+    //~ std::vector< std::vector<float> > yaw_coefs (1, std::vector<float> (0.0, N_POLY_COEFS));
+    //~ std::vector< std::vector<float> > yaw1_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-1));
+    //~ std::vector< std::vector<float> > yaw2_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-2));
+    //~ std::vector< std::vector<float> > prev_yaw_coefs (1, std::vector<float> (0.0, N_POLY_COEFS));
+    //~ std::vector< std::vector<float> > prev_yaw1_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-1));
+    //~ std::vector< std::vector<float> > prev_yaw2_coefs (1, std::vector<float> (0.0, N_POLY_COEFS-2));
+    
+    // time vectors and variables
+    std::vector<float> spline_delt_sec; // time step sizes for each segment
+    std::vector<float> spline_cumt_sec; // cumulative time markers for each segment
+    std::vector<float> prev_spline_delt_sec;
+    std::vector<float> prev_spline_cumt_sec;
+    float spline_start_t_sec_abs = 0.0;	// absolute time of spline start in sec
+    float spline_term_t_sec_rel = 0.0;	// time of spline termination relative to start
+    float prev_spline_start_t_sec_abs = 0.0;	// absolute time of spline start in sec
+    float prev_spline_term_t_sec_rel = 0.0;	// time of spline termination relative to start
     
     /** TODO: change later with m and J estimators */
     _mass = MASS_TEMP;
@@ -1623,9 +1715,12 @@ MulticopterTrajectoryControl::task_main()
             _vel(1) = _local_pos.vy;
             _vel(2) = _local_pos.vz;
                 
+			printf("DEBUG003\n");
                 
             // Check that trajectory data is available
             if (_traj_spline.segArr[0].nSeg > 0) {
+				
+				printf("DEBUG004\n");
                 
                 // in case of interupted trajectory, make sure to 
                 // hold at current position instead of going
@@ -1639,125 +1734,134 @@ MulticopterTrajectoryControl::task_main()
                     _control_trajectory_started = true;
                     
                     /* Swap existing trajectory data into _prev container */
-                    _spline_delt_sec.swap(_prev_spline_delt_sec);
-                    _spline_cumt_sec.swap(_prev_spline_cumt_sec);
-					_x_coefs.swap(_prev_x_coefs);
-					_xv_coefs.swap(_prev_xv_coefs);
-					_xa_coefs.swap(_prev_xa_coefs);
-					_xj_coefs.swap(_prev_xj_coefs);
-					_xs_coefs.swap(_prev_xs_coefs);
-					_y_coefs.swap(_prev_y_coefs);
-					_yv_coefs.swap(_prev_yv_coefs);
-					_ya_coefs.swap(_prev_ya_coefs);
-					_yj_coefs.swap(_prev_yj_coefs);
-					_ys_coefs.swap(_prev_ys_coefs);
-					_z_coefs.swap(_prev_z_coefs);
-					_zv_coefs.swap(_prev_zv_coefs);
-					_za_coefs.swap(_prev_za_coefs);
-					_zj_coefs.swap(_prev_zj_coefs);
-					_zs_coefs.swap(_prev_zs_coefs);
-					_yaw_coefs.swap(_prev_yaw_coefs);
-					_yaw1_coefs.swap(_prev_yaw1_coefs);
-					_yaw2_coefs.swap(_prev_yaw2_coefs);
+                    spline_delt_sec.swap(prev_spline_delt_sec);
+                    spline_cumt_sec.swap(prev_spline_cumt_sec);
+                    prev_spline_start_t_sec_abs = spline_start_t_sec_abs;
+					prev_spline_term_t_sec_rel = spline_term_t_sec_rel;
+					x_coefs.swap(prev_x_coefs);
+					xv_coefs.swap(prev_xv_coefs);
+					xa_coefs.swap(prev_xa_coefs);
+					xj_coefs.swap(prev_xj_coefs);
+					xs_coefs.swap(prev_xs_coefs);
+					y_coefs.swap(prev_y_coefs);
+					yv_coefs.swap(prev_yv_coefs);
+					ya_coefs.swap(prev_ya_coefs);
+					yj_coefs.swap(prev_yj_coefs);
+					ys_coefs.swap(prev_ys_coefs);
+					z_coefs.swap(prev_z_coefs);
+					zv_coefs.swap(prev_zv_coefs);
+					za_coefs.swap(prev_za_coefs);
+					zj_coefs.swap(prev_zj_coefs);
+					zs_coefs.swap(prev_zs_coefs);
+					yaw_coefs.swap(prev_yaw_coefs);
+					yaw1_coefs.swap(prev_yaw1_coefs);
+					yaw2_coefs.swap(prev_yaw2_coefs);
                     
                     // number of segments in spline
                     int n_spline_seg = _traj_spline.segArr[0].nSeg;
                     
                     /* Resize vector of appropriate size */
                     // avoid allocation and deallocation as it can be costly
-                    _spline_delt_sec.resize(n_spline_seg);
-                    _spline_cumt_sec.resize(n_spline_seg);
-                    _x_coefs.resize(n_spline_seg);
-                    _xv_coefs.resize(n_spline_seg);
-                    _xa_coefs.resize(n_spline_seg);
-                    _xj_coefs.resize(n_spline_seg);
-                    _xs_coefs.resize(n_spline_seg);
-                    _y_coefs.resize(n_spline_seg);
-                    _yv_coefs.resize(n_spline_seg);
-                    _ya_coefs.resize(n_spline_seg);
-                    _yj_coefs.resize(n_spline_seg);
-                    _ys_coefs.resize(n_spline_seg);
-                    _z_coefs.resize(n_spline_seg);
-                    _zv_coefs.resize(n_spline_seg);
-                    _za_coefs.resize(n_spline_seg);
-                    _zj_coefs.resize(n_spline_seg);
-                    _zs_coefs.resize(n_spline_seg);
-                    _yaw_coefs.resize(n_spline_seg);
-                    _yaw1_coefs.resize(n_spline_seg);
-                    _yaw2_coefs.resize(n_spline_seg);
-                    //~ _spline_delt_sec.resize(n_spline_seg);
-                    //~ _spline_delt_sec = std::vector<float> (n_spline_seg, 0.0f);
-                    //~ _spline_cumt_sec.resize(n_spline_seg);
-                    //~ _spline_cumt_sec = std::vector<float> (n_spline_seg, 0.0f);
-                    //~ _x_coefs.resize(n_spline_seg);
-                    //~ _x_coefs = std::vector< std::vector<float> > (n_spline_seg, std::vector<float> (N_POLY_COEFS));
-                    //~ _y_coefs.resize(n_spline_seg);
-                    //~ _y_coefs = std::vector< std::vector<float> > (n_spline_seg, std::vector<float> (N_POLY_COEFS));
-                    //~ _z_coefs.resize(n_spline_seg);
-                    //~ _z_coefs = std::vector< std::vector<float> > (n_spline_seg, std::vector<float> (N_POLY_COEFS));
-                    //~ _yaw_coefs.resize(n_spline_seg);
-                    //~ _yaw_coefs = std::vector< std::vector<float> > (n_spline_seg, std::vector<float> (N_POLY_COEFS));
+                    spline_delt_sec.resize(n_spline_seg);
+                    spline_cumt_sec.resize(n_spline_seg);
+                    x_coefs.resize(n_spline_seg);
+                    xv_coefs.resize(n_spline_seg);
+                    xa_coefs.resize(n_spline_seg);
+                    xj_coefs.resize(n_spline_seg);
+                    xs_coefs.resize(n_spline_seg);
+                    y_coefs.resize(n_spline_seg);
+                    yv_coefs.resize(n_spline_seg);
+                    ya_coefs.resize(n_spline_seg);
+                    yj_coefs.resize(n_spline_seg);
+                    ys_coefs.resize(n_spline_seg);
+                    z_coefs.resize(n_spline_seg);
+                    zv_coefs.resize(n_spline_seg);
+                    za_coefs.resize(n_spline_seg);
+                    zj_coefs.resize(n_spline_seg);
+                    zs_coefs.resize(n_spline_seg);
+                    yaw_coefs.resize(n_spline_seg);
+                    yaw1_coefs.resize(n_spline_seg);
+                    yaw2_coefs.resize(n_spline_seg);
                         
                     
                     // Copy data from trajectory_spline topic
                     for (vecf2d_sz row = 0; row != n_spline_seg; ++row){
-                        _spline_delt_sec.at(row) = _traj_spline.segArr[row].Tdel;
-                        _x_coefs.at(row).resize(N_POLY_COEFS);
-						_y_coefs.at(row).resize(N_POLY_COEFS);
-						_z_coefs.at(row).resize(N_POLY_COEFS);
-						_yaw_coefs.at(row).resize(N_POLY_COEFS);
+                        spline_delt_sec.at(row) = _traj_spline.segArr[row].Tdel;
+                        x_coefs.at(row).resize(N_POLY_COEFS);
+						y_coefs.at(row).resize(N_POLY_COEFS);
+						z_coefs.at(row).resize(N_POLY_COEFS);
+						yaw_coefs.at(row).resize(N_POLY_COEFS);
                         for (vecf_sz col = 0; col != N_POLY_COEFS; ++col){
-                            _x_coefs.at(row).at(col) = _traj_spline.segArr[row].xCoefs[col];
-                            _y_coefs.at(row).at(col) = _traj_spline.segArr[row].yCoefs[col];
-                            _z_coefs.at(row).at(col) = _traj_spline.segArr[row].zCoefs[col];
-                            _yaw_coefs.at(row).at(col) = _traj_spline.segArr[row].yawCoefs[col];
+                            x_coefs.at(row).at(col) = _traj_spline.segArr[row].xCoefs[col];
+                            y_coefs.at(row).at(col) = _traj_spline.segArr[row].yCoefs[col];
+                            z_coefs.at(row).at(col) = _traj_spline.segArr[row].zCoefs[col];
+                            yaw_coefs.at(row).at(col) = _traj_spline.segArr[row].yawCoefs[col];
                         }
                     }
                     
                     
-                    // Generate cumulative time vector
-                    spline_start_time_sec = ((float)(t + SPLINE_START_DELAY))*_MICRO_;
-                    vector_cum_sum(_spline_delt_sec, 0.0f, _spline_cumt_sec);
+                    // Generate cumulative time vector, absolute start time, relative termination time, and relative transition time
+                    spline_start_t_sec_abs = ((float)(t + SPLINE_START_DELAY))*_MICRO_;
+                    vector_cum_sum(spline_delt_sec, 0.0f, spline_cumt_sec);
+                    spline_term_t_sec_rel = spline_cumt_sec.at(spline_cumt_sec.size()-1);
                     
                     
                     // Calculate derivative coefficients
-                    poly_deriv(_x_coefs, _xv_coefs);
-                    poly_deriv(_xv_coefs, _xa_coefs);
-                    poly_deriv(_xa_coefs, _xj_coefs);
-                    poly_deriv(_xj_coefs, _xs_coefs);
-                    poly_deriv(_y_coefs, _yv_coefs);
-                    poly_deriv(_yv_coefs, _ya_coefs);
-                    poly_deriv(_ya_coefs, _yj_coefs);
-                    poly_deriv(_yj_coefs, _ys_coefs);
-                    poly_deriv(_z_coefs, _zv_coefs);
-                    poly_deriv(_zv_coefs, _za_coefs);
-                    poly_deriv(_za_coefs, _zj_coefs);
-                    poly_deriv(_zj_coefs, _zs_coefs);
-                    poly_deriv(_yaw_coefs, _yaw1_coefs);
-                    poly_deriv(_yaw1_coefs, _yaw2_coefs);
+                    poly_deriv(x_coefs, xv_coefs);
+                    poly_deriv(xv_coefs, xa_coefs);
+                    poly_deriv(xa_coefs, xj_coefs);
+                    poly_deriv(xj_coefs, xs_coefs);
+                    poly_deriv(y_coefs, yv_coefs);
+                    poly_deriv(yv_coefs, ya_coefs);
+                    poly_deriv(ya_coefs, yj_coefs);
+                    poly_deriv(yj_coefs, ys_coefs);
+                    poly_deriv(z_coefs, zv_coefs);
+                    poly_deriv(zv_coefs, za_coefs);
+                    poly_deriv(za_coefs, zj_coefs);
+                    poly_deriv(zj_coefs, zs_coefs);
+                    poly_deriv(yaw_coefs, yaw1_coefs);
+                    poly_deriv(yaw1_coefs, yaw2_coefs);
                 }
                 
                 /* Calculate timing parameters */
 				// determine time in spline trajectory
-				float cur_spline_t = t_sec - spline_start_time_sec;
-				float spline_term_t = _spline_cumt_sec.at(_spline_cumt_sec.size()-1);
+				float cur_spline_t = t_sec - spline_start_t_sec_abs;
+				float prev_spline_t = t_sec - prev_spline_start_t_sec_abs;
 				
 				// determine polynomial segment being evaluated
 				std::vector<float>::iterator seg_it;
-				seg_it = std::lower_bound(_spline_cumt_sec.begin(), 
-					_spline_cumt_sec.end(), cur_spline_t);
-				int cur_seg = (int)(seg_it - _spline_cumt_sec.begin());
+				seg_it = std::lower_bound(spline_cumt_sec.begin(), 
+					spline_cumt_sec.end(), cur_spline_t);
+				int cur_seg = (int)(seg_it - spline_cumt_sec.begin());
 				
 				// determine time in polynomial segment
 				float cur_poly_t = cur_seg == 0 ? cur_spline_t :
-							cur_spline_t - _spline_cumt_sec.at(cur_seg-1);
-				float poly_term_t = cur_seg == 0 ? 0.0f : _spline_delt_sec.at(cur_seg-1);
+							cur_spline_t - spline_cumt_sec.at(cur_seg-1);
+				float poly_term_t = cur_seg == 0 ? 0.0f : spline_delt_sec.at(cur_seg-1);
                 
                 
                 /**
                  * Calculate nominal states and inputs
                  */
-                trajectory_nominal_state(cur_spline_t, spline_term_t, cur_seg, cur_poly_t, poly_term_t);
+				if (0 				< prev_spline_t 				&& 
+					prev_spline_t 	< prev_spline_term_t_sec_rel 	&& 
+					0 				< cur_spline_t 					&& 
+					cur_spline_t 	< spline_term_t_sec_rel 		&& 
+					cur_spline_t 	< SPLINE_TRANS_T_SEC_REL		&&
+					spline_start_t_sec_abs + SPLINE_TRANS_T_SEC_REL < prev_spline_start_t_sec_abs + prev_spline_term_t_sec_rel) {
+						
+					// Calculate smooth transition between trajectories
+					//~ dual_trajectory_transition_nominal_state(
+						//~ cur_spline_t, spline_term_t, cur_seg, cur_poly_t, poly_term_t,
+						//~ prev_spline_t, prev_spline_term_t_sec_rel, prev_spline_delt_sec, prev_spline_cumt_sec);
+						
+						
+				} else {
+					trajectory_nominal_state(cur_spline_t, spline_term_t_sec_rel, cur_seg, cur_poly_t, poly_term_t,
+						x_coefs, y_coefs, z_coefs, xv_coefs, yv_coefs, zv_coefs,
+						xa_coefs, ya_coefs, za_coefs, xj_coefs, yj_coefs, zj_coefs,
+						xs_coefs, ys_coefs, zs_coefs, yaw_coefs, yaw1_coefs, yaw2_coefs);
+				}
             
             } else {
                 // perform position hold
@@ -1769,8 +1873,10 @@ MulticopterTrajectoryControl::task_main()
             /**
              * Apply feedback control to nominal trajectory
              */
+             printf("DEBUG006\n");
             trajectory_feedback_controller(dt);
             _att_control = _M_sp;
+            printf("DEBUG007\n");
             
             /**
              * Apply filter to map thrust to throttle and apply safety
@@ -1784,6 +1890,7 @@ MulticopterTrajectoryControl::task_main()
             throttle = (throttle > TRAJ_PARAMS_THROTTLE_MAX) ? TRAJ_PARAMS_THROTTLE_MAX : throttle;
             throttle = (throttle < TRAJ_PARAMS_THROTTLE_MIN) ? TRAJ_PARAMS_THROTTLE_MIN : throttle;
             _thr_prev = throttle;
+            printf("DEBUG008\n");
              
             /**
              * Publish topics
