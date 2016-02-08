@@ -1269,7 +1269,6 @@ MulticopterTrajectoryControl::dual_trajectory_transition_nominal_state(
 	_pos_nom(1) = tau*y_cur + (1.0f-tau)*y_prev;
 	_pos_nom(2) = tau*z_cur + (1.0f-tau)*z_prev;
 	_psi_nom = tau*psi_cur + (1.0f-tau)*psi_prev;
-	printf("DEBUGOO2a\n");
 	
 	// nominal velocity
 	float xv_prev = poly_eval(_prev_xv_coefs.at(prev_seg), prev_poly_t);
@@ -1284,7 +1283,6 @@ MulticopterTrajectoryControl::dual_trajectory_transition_nominal_state(
 	_vel_nom(1) = 1.0f*(y_cur-y_prev)/SPLINE_TRANS_T_SEC_REL + tau*(yv_cur-yv_prev) + yv_prev;
 	_vel_nom(2) = 1.0f*(z_cur-z_prev)/SPLINE_TRANS_T_SEC_REL + tau*(zv_cur-zv_prev) + zv_prev;
 	_psi1_nom = 1.0f*(psi_cur-psi_prev)/SPLINE_TRANS_T_SEC_REL + tau*(psi1_cur-psi1_prev) + psi1_prev;
-	printf("DEBUGOO2b\n");
 	
 	// nominal acceleration
 	float xa_prev = poly_eval(_prev_xa_coefs.at(prev_seg), prev_poly_t);
@@ -1299,7 +1297,6 @@ MulticopterTrajectoryControl::dual_trajectory_transition_nominal_state(
 	_acc_nom(1) = 2.0f*(yv_cur-yv_prev)/SPLINE_TRANS_T_SEC_REL + tau*(ya_cur-ya_prev) + ya_prev;
 	_acc_nom(2) = 2.0f*(zv_cur-zv_prev)/SPLINE_TRANS_T_SEC_REL + tau*(za_cur-za_prev) + za_prev;
 	_psi2_nom = 2.0f*(psi1_cur-psi1_prev)/SPLINE_TRANS_T_SEC_REL + tau*(psi2_cur-psi2_prev) + psi2_prev;
-	printf("DEBUGOO2c\n");
 
 	// nominal jerk
 	float xj_prev = poly_eval(_prev_xj_coefs.at(prev_seg), prev_poly_t);
@@ -1311,7 +1308,6 @@ MulticopterTrajectoryControl::dual_trajectory_transition_nominal_state(
 	_jerk_nom(0) = 3.0f*(xa_cur-xa_prev)/SPLINE_TRANS_T_SEC_REL + tau*(xj_cur-xj_prev) + xj_prev;
 	_jerk_nom(1) = 3.0f*(ya_cur-ya_prev)/SPLINE_TRANS_T_SEC_REL + tau*(yj_cur-yj_prev) + yj_prev;
 	_jerk_nom(2) = 3.0f*(za_cur-za_prev)/SPLINE_TRANS_T_SEC_REL + tau*(zj_cur-zj_prev) + zj_prev;
-	printf("DEBUGOO2d\n");
 	
 	// nominal snap
 	float xs_prev = poly_eval(_prev_xs_coefs.at(prev_seg), prev_poly_t);
@@ -1323,7 +1319,6 @@ MulticopterTrajectoryControl::dual_trajectory_transition_nominal_state(
 	_snap_nom(0) = 4.0f*(xj_cur-xj_prev)/SPLINE_TRANS_T_SEC_REL + tau*(xs_cur-xs_prev) + xs_prev;
 	_snap_nom(1) = 4.0f*(yj_cur-yj_prev)/SPLINE_TRANS_T_SEC_REL + tau*(ys_cur-ys_prev) + ys_prev;
 	_snap_nom(2) = 4.0f*(zj_cur-zj_prev)/SPLINE_TRANS_T_SEC_REL + tau*(zs_cur-zs_prev) + zs_prev;
-	printf("DEBUGOO2e\n");
 	
 	// nominal force in world frame (eqn 16)
 	_F_nom = _acc_nom*_mass - z_W*(_mass*GRAV);
@@ -1332,13 +1327,11 @@ MulticopterTrajectoryControl::dual_trajectory_transition_nominal_state(
 		_F_nom.zero();
 		_F_nom(2) = -_safe_params.thrust_min;
 	}
-	printf("DEBUGOO2f\n");
 	
 	// nominal thrust, orientation, and angular velocity
 	force_orientation_mapping(_R_N2W, x_nom, y_nom, z_nom,
 		_uT_nom, uT1_nom, _Omg_nom, h_Omega,
 		_F_nom, _psi_nom, _psi1_nom);
-	printf("DEBUGOO2g\n");
 	
 	
 	// nominal angular acceleration
@@ -1349,13 +1342,11 @@ MulticopterTrajectoryControl::dual_trajectory_transition_nominal_state(
 	al_nom(0) = -dot(h_alpha, y_nom);
 	al_nom(1) = dot(h_alpha, x_nom);
 	al_nom(2) = dot(z_nom*_psi2_nom - h_Omega*_psi1_nom, z_W);
-	printf("DEBUGOO2h\n");
 	
 	// nominal moment input
 	math::Matrix<3, 3> R_W2B = _R_B2W.transposed();
 	_M_nom = _J_B*(R_W2B*_R_N2W*al_nom - cross(_Omg_body, R_W2B*_R_N2W*_Omg_nom)) +
 		cross(_Omg_body, _J_B*_Omg_body);
-	printf("DEBUGOO2i\n");
 		
 }
 
@@ -1778,7 +1769,6 @@ MulticopterTrajectoryControl::task_main()
                     
                     _control_trajectory_started = true;
                     
-                    printf("DEBUGOO3\n");
                     
                     /* Swap existing trajectory data into _prev container */
                     _spline_delt_sec.swap(_prev_spline_delt_sec);
@@ -1880,7 +1870,6 @@ MulticopterTrajectoryControl::task_main()
                     poly_deriv(_zj_coefs, _zs_coefs);
                     poly_deriv(_yaw_coefs, _yaw1_coefs);
                     poly_deriv(_yaw1_coefs, _yaw2_coefs);
-                    printf("DEBUGOO4\n");
                 }
                 
                 /* Calculate timing parameters */
@@ -1909,31 +1898,26 @@ MulticopterTrajectoryControl::task_main()
 					cur_spline_t 	< _spline_term_t_sec_rel 		&& 
 					cur_spline_t 	< SPLINE_TRANS_T_SEC_REL		&&
 					_spline_start_t_sec_abs + SPLINE_TRANS_T_SEC_REL < _prev_spline_start_t_sec_abs + _prev_spline_term_t_sec_rel) {
-						
-					printf("DEBUGOO5\n");
+
 					// determine polynomial segment for previous spline
 					std::vector<float>::iterator prev_seg_it;
 					prev_seg_it = std::lower_bound(_prev_spline_cumt_sec.begin(), 
 						_prev_spline_cumt_sec.end(), prev_spline_t);
 					int prev_seg = (int)(prev_seg_it - _prev_spline_cumt_sec.begin());
-					printf("DEBUGOO6\n");
+
 					
 					// determine time in polynomial segment
-					printf("DEBUG: prev_seg = %d, prev_spline_t = %d\n", prev_seg, (int)(prev_spline_t));
-					printf("DEBUG: _prev_spline_cumt_sec.at(prev_seg)\n", (int)(_prev_spline_cumt_sec.at(prev_seg)));
 					float prev_poly_t = prev_seg == 0 ? prev_spline_t :
 								prev_spline_t - _prev_spline_cumt_sec.at(prev_seg-1);
 					//~ floats prev_poly_term_t = prev_seg == 0 ? 0.0f : _prev_spline_delt_sec.at(cur_seg-1);
 					
 						
 					// Calculate smooth transition between trajectories
-					printf("DEBUGOO2\n");
 					dual_trajectory_transition_nominal_state(cur_spline_t, cur_seg, cur_poly_t, 
 						prev_spline_t, prev_seg, prev_poly_t);
 						
 						
 				} else {
-					printf("DEBUGOO1\n");
 					trajectory_nominal_state(cur_spline_t, _spline_term_t_sec_rel, cur_seg, cur_poly_t, poly_term_t);
 				}
             
