@@ -89,6 +89,11 @@
 // negative values retroactively sets start time to account for MPC iteration time
 //~ #define SPLINE_START_DELAY 5000000
 #define SPLINE_START_DELAY 0
+
+// Transition time for smooth transition between two trajectories
+// NOTE: this should be less than MPC time horizon in planner for proper behavior
+#define SPLINE_TRANS_T_SEC_REL 0.5f
+
 #define N_POLY_COEFS    10
 #define _MICRO_ 0.000001f
 #define GRAV 	9.81f
@@ -261,8 +266,12 @@ private:
     // time vectors
     std::vector<float> _spline_delt_sec; // time step sizes for each segment
     std::vector<float> _spline_cumt_sec; // cumulative time markers for each segment
+    float _spline_start_t_sec_abs;
+    float _spline_term_t_sec_rel;
     std::vector<float> _prev_spline_delt_sec;
     std::vector<float> _prev_spline_cumt_sec;
+    float _prev_spline_start_t_sec_abs;
+    float _prev_spline_term_t_sec_rel;
 
     /* define vector of appropriate size for trajectory spline polynomials */
     // position 
@@ -376,6 +385,8 @@ private:
      * Set position setpoint using trajectory control - Ross Allen
      */
     void        trajectory_nominal_state(float cur_spline_t, float spline_term_t, int cur_seg, float cur_poly_t, float poly_term_t);
+    void		dual_trajectory_transition_nominal_state( float cur_spline_t, int cur_seg, float cur_poly_t, 
+					float prev_spline_t, int prev_seg, float prev_poly_t);
     void		trajectory_feedback_controller(float dt);
     void        reset_trajectory();
     void		hold_position();
@@ -554,6 +565,11 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     _alpha = THROTTLE_FILTER_SMOOTHING;
     _k_thr = 0.0f;
     _thr_prev = 0.0f;
+    
+    _spline_start_t_sec_abs = 0.0f;
+    _spline_term_t_sec_rel = 0.0f;
+    _prev_spline_start_t_sec_abs = 0.0f;
+    _prev_spline_term_t_sec_rel = 0.0f;
 
 }
 
@@ -1219,6 +1235,121 @@ MulticopterTrajectoryControl::trajectory_nominal_state(
     
 }
 
+void
+MulticopterTrajectoryControl::dual_trajectory_transition_nominal_state(
+	float cur_spline_t, int cur_seg, float cur_poly_t, 
+	float prev_spline_t, int prev_seg, float prev_poly_t)
+{
+	
+	// local variables
+    math::Vector<3> x_nom;	x_nom.zero();	/**< nominal body x-axis */
+    math::Vector<3> y_nom;	y_nom.zero();	/**< nominal body x-axis */
+    math::Vector<3> z_nom;	z_nom.zero();	/**< nominal body x-axis */
+    float uT1_nom = 0.0f;	/**< 1st deriv of nominal thrust input */
+    float uT2_nom = 0.0f;	/**< 2nd deriv of nominal thrust input */
+    math::Vector<3> h_Omega; 	h_Omega.zero();
+    math::Vector<3> h_alpha;	h_alpha.zero();
+    math::Vector<3> al_nom;		al_nom.zero();
+    math::Vector<3> z_W;	z_W.zero();
+    z_W(2) = 1.0f;
+	
+	// transition parameter
+	float tau = cur_spline_t/SPLINE_TRANS_T_SEC_REL;
+	
+	// nominal position
+	float x_prev = poly_eval(_prev_x_coefs.at(prev_seg), prev_poly_t);
+	float x_cur = poly_eval(_x_coefs.at(cur_seg), cur_poly_t);
+	float y_prev = poly_eval(_prev_y_coefs.at(prev_seg), prev_poly_t);
+	float y_cur = poly_eval(_y_coefs.at(cur_seg), cur_poly_t);
+	float z_prev = poly_eval(_prev_z_coefs.at(prev_seg), prev_poly_t);
+	float z_cur = poly_eval(_z_coefs.at(cur_seg), cur_poly_t);
+	float psi_prev = poly_eval(_prev_yaw_coefs.at(prev_seg), prev_poly_t);
+	float psi_cur = poly_eval(_yaw_coefs.at(cur_seg), cur_poly_t);
+	_pos_nom(0) = tau*x_cur + (1.0f-tau)*x_prev;
+	_pos_nom(1) = tau*y_cur + (1.0f-tau)*y_prev;
+	_pos_nom(2) = tau*z_cur + (1.0f-tau)*z_prev;
+	_psi_nom = tau*psi_cur + (1.0f-tau)*psi_prev;
+	
+	// nominal velocity
+	float xv_prev = poly_eval(_prev_xv_coefs.at(prev_seg), prev_poly_t);
+	float xv_cur = poly_eval(_xv_coefs.at(cur_seg), cur_poly_t);
+	float yv_prev = poly_eval(_prev_yv_coefs.at(prev_seg), prev_poly_t);
+	float yv_cur = poly_eval(_yv_coefs.at(cur_seg), cur_poly_t);
+	float zv_prev = poly_eval(_prev_zv_coefs.at(prev_seg), prev_poly_t);
+	float zv_cur = poly_eval(_zv_coefs.at(cur_seg), cur_poly_t);
+	float psi1_prev = poly_eval(_prev_yaw1_coefs.at(prev_seg), prev_poly_t);
+	float psi1_cur = poly_eval(_yaw1_coefs.at(cur_seg), cur_poly_t);
+	_vel_nom(0) = 1.0f*(x_cur-x_prev)/SPLINE_TRANS_T_SEC_REL + tau*(xv_cur-xv_prev) + xv_prev;
+	_vel_nom(1) = 1.0f*(y_cur-y_prev)/SPLINE_TRANS_T_SEC_REL + tau*(yv_cur-yv_prev) + yv_prev;
+	_vel_nom(2) = 1.0f*(z_cur-z_prev)/SPLINE_TRANS_T_SEC_REL + tau*(zv_cur-zv_prev) + zv_prev;
+	_psi1_nom = 1.0f*(psi_cur-psi_prev)/SPLINE_TRANS_T_SEC_REL + tau*(psi1_cur-psi1_prev) + psi1_prev;
+	
+	// nominal acceleration
+	float xa_prev = poly_eval(_prev_xa_coefs.at(prev_seg), prev_poly_t);
+	float xa_cur = poly_eval(_xa_coefs.at(cur_seg), cur_poly_t);
+	float ya_prev = poly_eval(_prev_ya_coefs.at(prev_seg), prev_poly_t);
+	float ya_cur = poly_eval(_ya_coefs.at(cur_seg), cur_poly_t);
+	float za_prev = poly_eval(_prev_za_coefs.at(prev_seg), prev_poly_t);
+	float za_cur = poly_eval(_za_coefs.at(cur_seg), cur_poly_t);
+	float psi2_prev = poly_eval(_prev_yaw2_coefs.at(prev_seg), prev_poly_t);
+	float psi2_cur = poly_eval(_yaw2_coefs.at(cur_seg), cur_poly_t);
+	_acc_nom(0) = 2.0f*(xv_cur-xv_prev)/SPLINE_TRANS_T_SEC_REL + tau*(xa_cur-xa_prev) + xa_prev;
+	_acc_nom(1) = 2.0f*(yv_cur-yv_prev)/SPLINE_TRANS_T_SEC_REL + tau*(ya_cur-ya_prev) + ya_prev;
+	_acc_nom(2) = 2.0f*(zv_cur-zv_prev)/SPLINE_TRANS_T_SEC_REL + tau*(za_cur-za_prev) + za_prev;
+	_psi2_nom = 2.0f*(psi1_cur-psi1_prev)/SPLINE_TRANS_T_SEC_REL + tau*(psi2_cur-psi2_prev) + psi2_prev;
+
+	// nominal jerk
+	float xj_prev = poly_eval(_prev_xj_coefs.at(prev_seg), prev_poly_t);
+	float xj_cur = poly_eval(_xj_coefs.at(cur_seg), cur_poly_t);
+	float yj_prev = poly_eval(_prev_yj_coefs.at(prev_seg), prev_poly_t);
+	float yj_cur = poly_eval(_yj_coefs.at(cur_seg), cur_poly_t);
+	float zj_prev = poly_eval(_prev_zj_coefs.at(prev_seg), prev_poly_t);
+	float zj_cur = poly_eval(_zj_coefs.at(cur_seg), cur_poly_t);
+	_jerk_nom(0) = 3.0f*(xa_cur-xa_prev)/SPLINE_TRANS_T_SEC_REL + tau*(xj_cur-xj_prev) + xj_prev;
+	_jerk_nom(1) = 3.0f*(ya_cur-ya_prev)/SPLINE_TRANS_T_SEC_REL + tau*(yj_cur-yj_prev) + yj_prev;
+	_jerk_nom(2) = 3.0f*(za_cur-za_prev)/SPLINE_TRANS_T_SEC_REL + tau*(zj_cur-zj_prev) + zj_prev;
+	
+	// nominal snap
+	float xs_prev = poly_eval(_prev_xs_coefs.at(prev_seg), prev_poly_t);
+	float xs_cur = poly_eval(_xs_coefs.at(cur_seg), cur_poly_t);
+	float ys_prev = poly_eval(_prev_ys_coefs.at(prev_seg), prev_poly_t);
+	float ys_cur = poly_eval(_ys_coefs.at(cur_seg), cur_poly_t);
+	float zs_prev = poly_eval(_prev_zs_coefs.at(prev_seg), prev_poly_t);
+	float zs_cur = poly_eval(_zs_coefs.at(cur_seg), cur_poly_t);
+	_snap_nom(0) = 4.0f*(xj_cur-xj_prev)/SPLINE_TRANS_T_SEC_REL + tau*(xs_cur-xs_prev) + xs_prev;
+	_snap_nom(1) = 4.0f*(yj_cur-yj_prev)/SPLINE_TRANS_T_SEC_REL + tau*(ys_cur-ys_prev) + ys_prev;
+	_snap_nom(2) = 4.0f*(zj_cur-zj_prev)/SPLINE_TRANS_T_SEC_REL + tau*(zs_cur-zs_prev) + zs_prev;
+	
+	// nominal force in world frame (eqn 16)
+	_F_nom = _acc_nom*_mass - z_W*(_mass*GRAV);
+	if (_F_nom(2) > 0.0f || _F_nom.length()/_mass < _safe_params.freefall_thresh) {
+		// stabilize min thrust "free fall"
+		_F_nom.zero();
+		_F_nom(2) = -_safe_params.thrust_min;
+	}
+	
+	// nominal thrust, orientation, and angular velocity
+	force_orientation_mapping(_R_N2W, x_nom, y_nom, z_nom,
+		_uT_nom, uT1_nom, _Omg_nom, h_Omega,
+		_F_nom, _psi_nom, _psi1_nom);
+	
+	
+	// nominal angular acceleration
+	uT2_nom = -dot(_snap_nom*_mass + cross(
+		_Omg_nom, cross(_Omg_nom, z_nom)), z_nom);
+	h_alpha = -(_snap_nom*_mass + z_nom*uT2_nom + cross(_Omg_nom, z_nom)*2.0f*uT1_nom + 
+		cross(_Omg_nom, cross(_Omg_nom, z_nom)))*(1.0f/_uT_nom);
+	al_nom(0) = -dot(h_alpha, y_nom);
+	al_nom(1) = dot(h_alpha, x_nom);
+	al_nom(2) = dot(z_nom*_psi2_nom - h_Omega*_psi1_nom, z_W);
+	
+	// nominal moment input
+	math::Matrix<3, 3> R_W2B = _R_B2W.transposed();
+	_M_nom = _J_B*(R_W2B*_R_N2W*al_nom - cross(_Omg_body, R_W2B*_R_N2W*_Omg_nom)) +
+		cross(_Omg_body, _J_B*_Omg_body);
+		
+}
+
 /* Calculate the nominal state variables by blending 2 trajectories */
 //~ void
 //~ MulticopterTrajectoryControl::dual_trajectory_nominal_state(float t, float start_time_1, float start_time_2)
@@ -1532,7 +1663,7 @@ MulticopterTrajectoryControl::task_main()
     typedef std::vector< std::vector<float> >::size_type vecf2d_sz;
     
     // time vector
-    float spline_start_time_sec;
+    //float spline_start_time_sec;
     
     /** TODO: change later with m and J estimators */
     _mass = MASS_TEMP;
@@ -1641,6 +1772,8 @@ MulticopterTrajectoryControl::task_main()
                     /* Swap existing trajectory data into _prev container */
                     _spline_delt_sec.swap(_prev_spline_delt_sec);
                     _spline_cumt_sec.swap(_prev_spline_cumt_sec);
+                    _prev_spline_start_t_sec_abs = _spline_start_t_sec_abs;
+                    _prev_spline_term_t_sec_rel = _spline_term_t_sec_rel;
 					_x_coefs.swap(_prev_x_coefs);
 					_xv_coefs.swap(_prev_xv_coefs);
 					_xa_coefs.swap(_prev_xa_coefs);
@@ -1716,8 +1849,9 @@ MulticopterTrajectoryControl::task_main()
                     
                     
                     // Generate cumulative time vector
-                    spline_start_time_sec = ((float)(t + SPLINE_START_DELAY))*_MICRO_;
+                    _spline_start_t_sec_abs = ((float)(t + SPLINE_START_DELAY))*_MICRO_;
                     vector_cum_sum(_spline_delt_sec, 0.0f, _spline_cumt_sec);
+                    _spline_term_t_sec_rel = _spline_cumt_sec.at(_spline_cumt_sec.size()-1);
                     
                     
                     // Calculate derivative coefficients
@@ -1739,8 +1873,8 @@ MulticopterTrajectoryControl::task_main()
                 
                 /* Calculate timing parameters */
 				// determine time in spline trajectory
-				float cur_spline_t = t_sec - spline_start_time_sec;
-				float spline_term_t = _spline_cumt_sec.at(_spline_cumt_sec.size()-1);
+				float cur_spline_t = t_sec - _spline_start_t_sec_abs;
+				float prev_spline_t = t_sec - _prev_spline_start_t_sec_abs;
 				
 				// determine polynomial segment being evaluated
 				std::vector<float>::iterator seg_it;
@@ -1757,7 +1891,33 @@ MulticopterTrajectoryControl::task_main()
                 /**
                  * Calculate nominal states and inputs
                  */
-                trajectory_nominal_state(cur_spline_t, spline_term_t, cur_seg, cur_poly_t, poly_term_t);
+				if (0 				< prev_spline_t 				&& 
+					prev_spline_t 	< _prev_spline_term_t_sec_rel 	&& 
+					0 				< cur_spline_t 					&& 
+					cur_spline_t 	< _spline_term_t_sec_rel 		&& 
+					cur_spline_t 	< SPLINE_TRANS_T_SEC_REL		&&
+					_spline_start_t_sec_abs + SPLINE_TRANS_T_SEC_REL < _prev_spline_start_t_sec_abs + _prev_spline_term_t_sec_rel) {
+						
+					// determine polynomial segment for previous spline
+					std::vector<float>::iterator prev_seg_it;
+					prev_seg_it = std::lower_bound(_prev_spline_cumt_sec.begin(), 
+						_prev_spline_cumt_sec.end(), prev_spline_t);
+					int prev_seg = (int)(seg_it - _prev_spline_cumt_sec.begin());
+					
+					// determine time in polynomial segment
+					float prev_poly_t = prev_seg == 0 ? prev_spline_t :
+								prev_spline_t - _prev_spline_cumt_sec.at(cur_seg-1);
+					//~ floats prev_poly_term_t = prev_seg == 0 ? 0.0f : _prev_spline_delt_sec.at(cur_seg-1);
+					
+						
+					// Calculate smooth transition between trajectories
+					dual_trajectory_transition_nominal_state(cur_spline_t, cur_seg, cur_poly_t, 
+						prev_spline_t, prev_seg, prev_poly_t);
+						
+						
+				} else {
+					trajectory_nominal_state(cur_spline_t, _spline_term_t_sec_rel, cur_seg, cur_poly_t, poly_term_t);
+				}
             
             } else {
                 // perform position hold
