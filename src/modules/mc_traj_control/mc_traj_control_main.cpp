@@ -355,7 +355,7 @@ private:
     /**
      * Set position setpoint using trajectory control - Ross Allen
      */
-    void        trajectory_nominal_state(float t, float start_time);
+    void        trajectory_nominal_state(float cur_spline_t, float spline_term_t, int cur_seg, float cur_poly_t, float poly_term_t);
     void		trajectory_feedback_controller(float dt);
     void        reset_trajectory();
     void		hold_position();
@@ -1045,27 +1045,10 @@ MulticopterTrajectoryControl::force_orientation_mapping(
 
 /* Calculate the nominal state variables for the trajectory at the current time */
 void
-MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_time)
+MulticopterTrajectoryControl::trajectory_nominal_state(
+	float cur_spline_t, float spline_term_t, int cur_seg, float cur_poly_t, float poly_term_t)
 {
-    
-    /* TODO: verify this works for single polynomial segment spline */
-    
-    // determine time in spline trajectory
-    float cur_spline_t = t - start_time;
-    float spline_term_t = _spline_cumt_sec.at(_spline_cumt_sec.size()-1);
-    
-    // determine polynomial segment being evaluated
-    std::vector<float>::iterator seg_it;
-    seg_it = std::lower_bound(_spline_cumt_sec.begin(), 
-        _spline_cumt_sec.end(), cur_spline_t);
-    int cur_seg = (int)(seg_it - _spline_cumt_sec.begin());
-    
-    // determine time in polynomial segment
-    float cur_poly_t = cur_seg == 0 ? cur_spline_t :
-                cur_spline_t - _spline_cumt_sec.at(cur_seg-1);
-    float poly_term_t = cur_seg == 0 ? 0.0f : _spline_delt_sec.at(cur_seg-1);
-    
-    
+       
     // local variables
     math::Vector<3> x_nom;	x_nom.zero();	/**< nominal body x-axis */
     math::Vector<3> y_nom;	y_nom.zero();	/**< nominal body x-axis */
@@ -1165,6 +1148,122 @@ MulticopterTrajectoryControl::trajectory_nominal_state(float t, float start_time
     }
     
 }
+
+/* Calculate the nominal state variables by blending 2 trajectories */
+//~ void
+//~ MulticopterTrajectoryControl::dual_trajectory_nominal_state(float t, float start_time_1, float start_time_2)
+//~ {
+    //~ 
+    //~ /* TODO: verify this works for single polynomial segment spline */
+    //~ 
+    //~ // determine time in spline trajectory
+    //~ float spline_t_1 = t - start_time_1;
+    //~ float spline_term_t_1 = _spline_cumt_1_sec.at(_spline_cumt_1_sec.size()-1);
+    //~ float spline_t_2 = t - start_time_2;
+    //~ float spline_term_t_2 = _spline_cumt_2_sec.at(_spline_cumt_2_sec.size()-1);
+    //~ 
+    //~ // determine polynomial segment being evaluated
+    //~ std::vector<float>::iterator seg_it_1;
+    //~ seg_it_1 = std::lower_bound(_spline_cumt_1_sec.begin(), 
+        //~ _spline_cumt_1_sec.end(), spline_t_1);
+    //~ int seg_1 = (int)(seg_it_1 - _spline_cumt_1_sec.begin());
+    //~ std::vector<float>::iterator seg_it_2;
+    //~ seg_it_2 = std::lower_bound(_spline_cumt_2_sec.begin(), 
+        //~ _spline_cumt_2_sec.end(), spline_t_2);
+    //~ int seg_2 = (int)(seg_it_2 - _spline_cumt_2_sec.begin());
+    //~ 
+    //~ // determine time in polynomial segment
+    //~ float poly_t_1 = seg_1 == 0 ? spline_t_1 :
+                //~ spline_t_1 - _spline_cumt_1_sec.at(seg_1-1);
+    //~ float poly_term_t_1 = seg_1 == 0 ? 0.0f : _spline_delt_1_sec.at(seg_1-1);
+    //~ float poly_t_2 = seg_2 == 0 ? spline_t_2 :
+                //~ spline_t_2 - _spline_cumt_2_sec.at(seg_2-1);
+    //~ float poly_term_t_2 = seg_2 == 0 ? 0.0f : _spline_delt_2_sec.at(seg_2-1);
+    //~ 
+    //~ 
+    //~ // local variables
+    //~ math::Vector<3> x_nom;	x_nom.zero();	/**< nominal body x-axis */
+    //~ math::Vector<3> y_nom;	y_nom.zero();	/**< nominal body x-axis */
+    //~ math::Vector<3> z_nom;	z_nom.zero();	/**< nominal body x-axis */
+    //~ float uT1_nom = 0.0f;	/**< 1st deriv of nominal thrust input */
+    //~ float uT2_nom = 0.0f;	/**< 2nd deriv of nominal thrust input */
+    //~ math::Vector<3> h_Omega; 	h_Omega.zero();
+    //~ math::Vector<3> h_alpha;	h_alpha.zero();
+    //~ math::Vector<3> al_nom;		al_nom.zero();
+    //~ math::Vector<3> z_W;	z_W.zero();
+    //~ z_W(2) = 1.0f;
+    //~ 
+    //~ // transition weight
+    //~ float tau = spline_t_2/t_trans;
+    //~ 
+		//~ 
+	//~ // nominal position
+	//~ math::Vector<3> traj_1_pos;
+	//~ traj_1_pos(0) = poly_eval(x_1_coefs.at(cur_seg_1), poly_t_1);
+	//~ traj_1_pos(1) = poly_eval(y_1_coefs.at(cur_seg_1), poly_t_1);
+	//~ traj_1_pos(2) = poly_eval(z_1_coefs.at(cur_seg_1), poly_t_1);
+	//~ math::Vector<3> traj_2_pos;
+	//~ pos_1(0) = poly_eval(x_1_coefs.at(cur_seg_1), poly_t_1);
+	//~ pos_1(1) = poly_eval(y_1_coefs.at(cur_seg_1), poly_t_1);
+	//~ pos_1(2) = poly_eval(z_1_coefs.at(cur_seg_1), poly_t_1);
+	//~ _pos_nom(0) = tau*poly_eval(x_2_coefs.at(cur_seg_2), poly_t_2) + (1.0-tau)*poly_eval(x_1_coefs.at(cur_seg_1), poly_t_1);
+	//~ _pos_nom(1) = tau*poly_eval(y_2_coefs.at(cur_seg_2), poly_t_2) + (1.0-tau)*poly_eval(y_1_coefs.at(cur_seg_1), poly_t_1);
+	//~ _pos_nom(2) = tau*poly_eval(z_2_coefs.at(cur_seg_2), poly_t_2) + (1.0-tau)*poly_eval(z_1_coefs.at(cur_seg_1), poly_t_1);
+	//~ _psi_nom = tau*poly_eval(yaw_2_coefs.at(cur_seg_2), poly_t_2) + (1.0+tau)*poly_eval(yaw_1_coefs.at(cur_seg_1), poly_t_1);
+//~ 
+	//~ // nominal velocity
+	//~ _vel_nom(0) = poly_eval(_xv_coefs.at(cur_seg), poly_t_1);
+	//~ _vel_nom(1) = poly_eval(_yv_coefs.at(cur_seg), poly_t_1);
+	//~ _vel_nom(2) = poly_eval(_zv_coefs.at(cur_seg), poly_t_1);
+	//~ _psi1_nom = poly_eval(_yaw1_coefs.at(cur_seg), poly_t_1);
+//~ 
+	//~ // nominal acceleration
+	//~ _acc_nom(0) = poly_eval(_xa_coefs.at(cur_seg), poly_t_1);
+	//~ _acc_nom(1) = poly_eval(_ya_coefs.at(cur_seg), poly_t_1);
+	//~ _acc_nom(2) = poly_eval(_za_coefs.at(cur_seg), poly_t_1);
+	//~ _psi2_nom = poly_eval(_yaw2_coefs.at(cur_seg), poly_t_1);
+//~ 
+	//~ // nominal jerk
+	//~ _jerk_nom(0) = poly_eval(_xj_coefs.at(cur_seg), poly_t_1);
+	//~ _jerk_nom(1) = poly_eval(_yj_coefs.at(cur_seg), poly_t_1);
+	//~ _jerk_nom(2) = poly_eval(_zj_coefs.at(cur_seg), poly_t_1);
+//~ 
+	//~ // nominal snap
+	//~ _snap_nom(0) = poly_eval(_xs_coefs.at(cur_seg), poly_t_1);
+	//~ _snap_nom(1) = poly_eval(_ys_coefs.at(cur_seg), poly_t_1);
+	//~ _snap_nom(2) = poly_eval(_zs_coefs.at(cur_seg), poly_t_1);
+//~ 
+	//~ // nominal force in world frame (eqn 16)
+	//~ _F_nom = _acc_nom*_mass - z_W*(_mass*GRAV);
+	//~ if (_F_nom(2) > 0.0f || _F_nom.length()/_mass < _safe_params.freefall_thresh) {
+		//~ // stabilize min thrust "free fall"
+		//~ _F_nom.zero();
+		//~ _F_nom(2) = -_safe_params.thrust_min;
+	//~ }
+//~ 
+	//~ // nominal thrust, orientation, and angular velocity
+	//~ force_orientation_mapping(_R_N2W, x_nom, y_nom, z_nom,
+		//~ _uT_nom, uT1_nom, _Omg_nom, h_Omega,
+		//~ _F_nom, _psi_nom, _psi1_nom);
+//~ 
+//~ 
+	//~ // nominal angular acceleration
+	//~ uT2_nom = -dot(_snap_nom*_mass + cross(
+		//~ _Omg_nom, cross(_Omg_nom, z_nom)), z_nom);
+	//~ h_alpha = -(_snap_nom*_mass + z_nom*uT2_nom + cross(_Omg_nom, z_nom)*2.0f*uT1_nom + 
+		//~ cross(_Omg_nom, cross(_Omg_nom, z_nom)))*(1.0f/_uT_nom);
+	//~ al_nom(0) = -dot(h_alpha, y_nom);
+	//~ al_nom(1) = dot(h_alpha, x_nom);
+	//~ al_nom(2) = dot(z_nom*_psi2_nom - h_Omega*_psi1_nom, z_W);
+//~ 
+	//~ // nominal moment input
+	//~ math::Matrix<3, 3> R_W2B = _R_B2W.transposed();
+	//~ _M_nom = _J_B*(R_W2B*_R_N2W*al_nom - cross(_Omg_body, R_W2B*_R_N2W*_Omg_nom)) +
+		//~ cross(_Omg_body, _J_B*_Omg_body);
+						//~ 
+//~ 
+    //~ 
+//~ }
 
 /* Apply feedback control to nominal trajectory */
 void
@@ -1519,10 +1618,27 @@ MulticopterTrajectoryControl::task_main()
                     poly_deriv(_yaw1_coefs, _yaw2_coefs);
                 }
                 
+                /* Calculate timing parameters */
+				// determine time in spline trajectory
+				float cur_spline_t = t_sec - spline_start_time_sec;
+				float spline_term_t = _spline_cumt_sec.at(_spline_cumt_sec.size()-1);
+				
+				// determine polynomial segment being evaluated
+				std::vector<float>::iterator seg_it;
+				seg_it = std::lower_bound(_spline_cumt_sec.begin(), 
+					_spline_cumt_sec.end(), cur_spline_t);
+				int cur_seg = (int)(seg_it - _spline_cumt_sec.begin());
+				
+				// determine time in polynomial segment
+				float cur_poly_t = cur_seg == 0 ? cur_spline_t :
+							cur_spline_t - _spline_cumt_sec.at(cur_seg-1);
+				float poly_term_t = cur_seg == 0 ? 0.0f : _spline_delt_sec.at(cur_seg-1);
+                
+                
                 /**
                  * Calculate nominal states and inputs
                  */
-                trajectory_nominal_state(t_sec, spline_start_time_sec);
+                trajectory_nominal_state(cur_spline_t, spline_term_t, cur_seg, cur_poly_t, poly_term_t);
             
             } else {
                 // perform position hold
