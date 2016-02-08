@@ -88,9 +88,9 @@
 // Spline initiation (positive value gives a delay for testing safety, 
 // negative values retroactively sets start time to account for MPC iteration time
 //~ #define SPLINE_START_DELAY 5000000
-#define SPLINE_START_DELAY -300000
+#define SPLINE_START_DELAY 0
 #define N_POLY_COEFS    10
-
+#define _MICRO_ 0.000001f
 #define GRAV 	9.81f
 
 #define ZERO_GAIN_THRESHOLD 0.000001f
@@ -247,7 +247,7 @@ private:
     math::Vector<3> _M_sp;			/**< moment setpoint in body coords */
     math::Vector<3>	_att_control;	/**< attitude control vector */
     
-    int _n_spline_seg;      /** < number of segments in spline (not max number, necassarily) */
+    //int _n_spline_seg;      /** < number of segments in spline (not max number, necassarily) */
     
     /* Dynamical properties of quadrotor*/
     float _mass;					/**< mass of quadrotor (kg) */
@@ -261,37 +261,57 @@ private:
     // time vectors
     std::vector<float> _spline_delt_sec; // time step sizes for each segment
     std::vector<float> _spline_cumt_sec; // cumulative time markers for each segment
+    std::vector<float> _prev_spline_delt_sec;
+    std::vector<float> _prev_spline_cumt_sec;
 
     /* define vector of appropriate size for trajectory spline polynomials */
     // position 
     std::vector< std::vector<float> > _x_coefs;
     std::vector< std::vector<float> > _y_coefs;
     std::vector< std::vector<float> > _z_coefs;
+    std::vector< std::vector<float> > _prev_x_coefs;
+    std::vector< std::vector<float> > _prev_y_coefs;
+    std::vector< std::vector<float> > _prev_z_coefs;
     
     // velocity
     std::vector< std::vector<float> > _xv_coefs;
     std::vector< std::vector<float> > _yv_coefs;
     std::vector< std::vector<float> > _zv_coefs;
+    std::vector< std::vector<float> > _prev_xv_coefs;
+    std::vector< std::vector<float> > _prev_yv_coefs;
+    std::vector< std::vector<float> > _prev_zv_coefs;
     
     // acceleration
     std::vector< std::vector<float> > _xa_coefs;
     std::vector< std::vector<float> > _ya_coefs;
     std::vector< std::vector<float> > _za_coefs;
+    std::vector< std::vector<float> > _prev_xa_coefs;
+    std::vector< std::vector<float> > _prev_ya_coefs;
+    std::vector< std::vector<float> > _prev_za_coefs;
     
     // jerk
     std::vector< std::vector<float> > _xj_coefs;
     std::vector< std::vector<float> > _yj_coefs;
     std::vector< std::vector<float> > _zj_coefs;
+    std::vector< std::vector<float> > _prev_xj_coefs;
+    std::vector< std::vector<float> > _prev_yj_coefs;
+    std::vector< std::vector<float> > _prev_zj_coefs;
     
     // snap
     std::vector< std::vector<float> > _xs_coefs;
     std::vector< std::vector<float> > _ys_coefs;
     std::vector< std::vector<float> > _zs_coefs;
+    std::vector< std::vector<float> > _prev_xs_coefs;
+    std::vector< std::vector<float> > _prev_ys_coefs;
+    std::vector< std::vector<float> > _prev_zs_coefs;
     
     // yaw and yaw derivatives
     std::vector< std::vector<float> > _yaw_coefs;
     std::vector< std::vector<float> > _yaw1_coefs;
     std::vector< std::vector<float> > _yaw2_coefs;
+    std::vector< std::vector<float> > _prev_yaw_coefs;
+    std::vector< std::vector<float> > _prev_yaw1_coefs;
+    std::vector< std::vector<float> > _prev_yaw2_coefs;
     
 
     /**
@@ -527,7 +547,7 @@ MulticopterTrajectoryControl::MulticopterTrajectoryControl() :
     _M_sp.zero();
     _att_control.zero();
 
-    _n_spline_seg = 0;
+    //_n_spline_seg = 0;
     
     _mass = 0.0f;
     _J_B.identity();
@@ -895,6 +915,33 @@ MulticopterTrajectoryControl::poly_eval(const std::vector<float>& coefs, float t
     return p;
 }
 
+//~ float
+//~ MulticopterTrajectoryControl::spline_eval(const std::vector<float>& spline, int seg, int nCoef, float t)
+//~ {
+	//~ int deg = nCoef - 1;	// degree of polynomial
+//~ 
+	//~ // base of iterator
+	//~ int base_iter = seg*nCoef;
+    //~ 
+    //~ // initialize return value
+    //~ float p = coefs.at(seg*nCoef + deg);
+    //~ 
+    //~ for(int i = deg-1; ; --i){
+        //~ 
+        //~ // Calculate with Horner's Rule
+        //~ p = p*t + coefs.at(base_iter + i);
+        //~ 
+        //~ // Check break condition.
+        //~ // This clunky for a for loop but is necessary because vecf_sz
+        //~ // in some form of unsigned int. If the condition is left as
+        //~ // i >= 0, then the condition is always true
+        //~ if (i == 0) break;
+    //~ }
+//~ 
+    //~ return p;
+	//~ 
+//~ }
+
 float
 MulticopterTrajectoryControl::poly_eval(const float coefs_arr[N_POLY_COEFS], float t)
 {
@@ -961,6 +1008,29 @@ std::vector< std::vector<float> >& deriv) {
     }
     
 }
+
+/* Evaluate derivatives of a polynomial */
+//~ void
+//~ MulticopterTrajectoryControl::poly_deriv(
+//~ const std::vector<float>& poly, std::vector<float>& deriv, int nSeg, int nCoef)
+//~ {    
+    //~ deriv.resize(nSeg*(nCoef-1));      // resize number rows
+//~ 
+    //~ 
+    //~ for (int seg = 0; seg != nSeg; ++seg) {
+		//~ 
+		//~ // base iterator
+		//~ int deriv_base_iter = seg*(nCoef-1);
+		//~ int poly_base_iter = seg*nCoef;
+        //~ 
+        //~ for (int deriv_coef = 0; deriv_coef != nCoef-1; ++deriv_coef) {
+            //~ poly_coef = deriv_coef+1;
+            //~ deriv.at(deriv_base_iter + deriv_coef) = ((float)poly_coef)*poly.at(poly_base_iter + poly_coef);
+        //~ }
+        //~ 
+    //~ }
+    //~ 
+//~ }
 
 /* hold position */
 void
@@ -1568,25 +1638,74 @@ MulticopterTrajectoryControl::task_main()
                     
                     _control_trajectory_started = true;
                     
-                    // number of segments in spline
-                    _n_spline_seg = _traj_spline.segArr[0].nSeg;
+                    /* Swap existing trajectory data into _prev container */
+                    _spline_delt_sec.swap(_prev_spline_delt_sec);
+                    _spline_cumt_sec.swap(_prev_spline_cumt_sec);
+					_x_coefs.swap(_prev_x_coefs);
+					_xv_coefs.swap(_prev_xv_coefs);
+					_xa_coefs.swap(_prev_xa_coefs);
+					_xj_coefs.swap(_prev_xj_coefs);
+					_xs_coefs.swap(_prev_xs_coefs);
+					_y_coefs.swap(_prev_y_coefs);
+					_yv_coefs.swap(_prev_yv_coefs);
+					_ya_coefs.swap(_prev_ya_coefs);
+					_yj_coefs.swap(_prev_yj_coefs);
+					_ys_coefs.swap(_prev_ys_coefs);
+					_z_coefs.swap(_prev_z_coefs);
+					_zv_coefs.swap(_prev_zv_coefs);
+					_za_coefs.swap(_prev_za_coefs);
+					_zj_coefs.swap(_prev_zj_coefs);
+					_zs_coefs.swap(_prev_zs_coefs);
+					_yaw_coefs.swap(_prev_yaw_coefs);
+					_yaw1_coefs.swap(_prev_yaw1_coefs);
+					_yaw2_coefs.swap(_prev_yaw2_coefs);
                     
-                    // initialize vector of appropriate size
-                    _spline_delt_sec = std::vector<float> (_n_spline_seg, 0.0f); // time step sizes for each segment
-                    _spline_cumt_sec = std::vector<float> (_n_spline_seg, 0.0f); // cumulative time markers for each segment
-                    _x_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
-                        std::vector<float> (N_POLY_COEFS));
-                    _y_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
-                        std::vector<float> (N_POLY_COEFS));
-                    _z_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
-                        std::vector<float> (N_POLY_COEFS));
-                    _yaw_coefs = std::vector< std::vector<float> > (_n_spline_seg, 
-                        std::vector<float> (N_POLY_COEFS));
+                    // number of segments in spline
+                    int n_spline_seg = _traj_spline.segArr[0].nSeg;
+                    
+                    /* Resize vector of appropriate size */
+                    // avoid allocation and deallocation as it can be costly
+                    _spline_delt_sec.resize(n_spline_seg);
+                    _spline_cumt_sec.resize(n_spline_seg);
+                    _x_coefs.resize(n_spline_seg);
+                    _xv_coefs.resize(n_spline_seg);
+                    _xa_coefs.resize(n_spline_seg);
+                    _xj_coefs.resize(n_spline_seg);
+                    _xs_coefs.resize(n_spline_seg);
+                    _y_coefs.resize(n_spline_seg);
+                    _yv_coefs.resize(n_spline_seg);
+                    _ya_coefs.resize(n_spline_seg);
+                    _yj_coefs.resize(n_spline_seg);
+                    _ys_coefs.resize(n_spline_seg);
+                    _z_coefs.resize(n_spline_seg);
+                    _zv_coefs.resize(n_spline_seg);
+                    _za_coefs.resize(n_spline_seg);
+                    _zj_coefs.resize(n_spline_seg);
+                    _zs_coefs.resize(n_spline_seg);
+                    _yaw_coefs.resize(n_spline_seg);
+                    _yaw1_coefs.resize(n_spline_seg);
+                    _yaw2_coefs.resize(n_spline_seg);
+                    //~ _spline_delt_sec.resize(n_spline_seg);
+                    //~ _spline_delt_sec = std::vector<float> (n_spline_seg, 0.0f);
+                    //~ _spline_cumt_sec.resize(n_spline_seg);
+                    //~ _spline_cumt_sec = std::vector<float> (n_spline_seg, 0.0f);
+                    //~ _x_coefs.resize(n_spline_seg);
+                    //~ _x_coefs = std::vector< std::vector<float> > (n_spline_seg, std::vector<float> (N_POLY_COEFS));
+                    //~ _y_coefs.resize(n_spline_seg);
+                    //~ _y_coefs = std::vector< std::vector<float> > (n_spline_seg, std::vector<float> (N_POLY_COEFS));
+                    //~ _z_coefs.resize(n_spline_seg);
+                    //~ _z_coefs = std::vector< std::vector<float> > (n_spline_seg, std::vector<float> (N_POLY_COEFS));
+                    //~ _yaw_coefs.resize(n_spline_seg);
+                    //~ _yaw_coefs = std::vector< std::vector<float> > (n_spline_seg, std::vector<float> (N_POLY_COEFS));
                         
                     
                     // Copy data from trajectory_spline topic
-                    for (vecf2d_sz row = 0; row != _n_spline_seg; ++row){
+                    for (vecf2d_sz row = 0; row != n_spline_seg; ++row){
                         _spline_delt_sec.at(row) = _traj_spline.segArr[row].Tdel;
+                        _x_coefs.at(row).resize(N_POLY_COEFS);
+						_y_coefs.at(row).resize(N_POLY_COEFS);
+						_z_coefs.at(row).resize(N_POLY_COEFS);
+						_yaw_coefs.at(row).resize(N_POLY_COEFS);
                         for (vecf_sz col = 0; col != N_POLY_COEFS; ++col){
                             _x_coefs.at(row).at(col) = _traj_spline.segArr[row].xCoefs[col];
                             _y_coefs.at(row).at(col) = _traj_spline.segArr[row].yCoefs[col];
@@ -1597,7 +1716,7 @@ MulticopterTrajectoryControl::task_main()
                     
                     
                     // Generate cumulative time vector
-                    spline_start_time_sec = ((float)(t + SPLINE_START_DELAY))*0.000001f;
+                    spline_start_time_sec = ((float)(t + SPLINE_START_DELAY))*_MICRO_;
                     vector_cum_sum(_spline_delt_sec, 0.0f, _spline_cumt_sec);
                     
                     
