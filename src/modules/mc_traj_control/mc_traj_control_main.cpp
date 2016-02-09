@@ -88,7 +88,7 @@
 // Spline initiation (positive value gives a delay for testing safety, 
 // negative values retroactively sets start time to account for MPC iteration time
 //~ #define SPLINE_START_DELAY 5000000
-#define SPLINE_START_DELAY 0
+#define SPLINE_START_DELAY 500000
 
 // Transition time for smooth transition between two trajectories
 // NOTE: this should be less than MPC time horizon in planner for proper behavior
@@ -1906,7 +1906,7 @@ MulticopterTrajectoryControl::task_main()
                 /* Calculate timing parameters */
 				// determine time in spline trajectory
 				float cur_spline_t = t_sec - _spline_start_t_sec_abs;
-				float prev_spline_t = t_sec - _prev_spline_start_t_sec_abs;
+				//~ float prev_spline_t = t_sec - _prev_spline_start_t_sec_abs;
 				
 				// determine polynomial segment being evaluated
 				std::vector<float>::iterator seg_it;
@@ -1923,34 +1923,36 @@ MulticopterTrajectoryControl::task_main()
                 /**
                  * Calculate nominal states and inputs
                  */
-				if (0 				< prev_spline_t 				&& 
-					prev_spline_t 	< _prev_spline_term_t_sec_rel 	&& 
-					0 				< cur_spline_t 					&& 
-					cur_spline_t 	< _spline_term_t_sec_rel 		&& 
-					cur_spline_t 	< SPLINE_TRANS_T_SEC_REL		&&
-					_spline_start_t_sec_abs + SPLINE_TRANS_T_SEC_REL < _prev_spline_start_t_sec_abs + _prev_spline_term_t_sec_rel) {
-
-					// determine polynomial segment for previous spline
-					std::vector<float>::iterator prev_seg_it;
-					prev_seg_it = std::lower_bound(_prev_spline_cumt_sec.begin(), 
-						_prev_spline_cumt_sec.end(), prev_spline_t);
-					int prev_seg = (int)(prev_seg_it - _prev_spline_cumt_sec.begin());
-
-					
-					// determine time in polynomial segment
-					float prev_poly_t = prev_seg == 0 ? prev_spline_t :
-								prev_spline_t - _prev_spline_cumt_sec.at(prev_seg-1);
-					//~ floats prev_poly_term_t = prev_seg == 0 ? 0.0f : _prev_spline_delt_sec.at(cur_seg-1);
-					
-						
-					// Calculate smooth transition between trajectories
-					dual_trajectory_transition_nominal_state(cur_spline_t, cur_seg, cur_poly_t, 
-						prev_spline_t, prev_seg, prev_poly_t);
-						
-						
-				} else {
-					trajectory_nominal_state(cur_spline_t, _spline_term_t_sec_rel, cur_seg, cur_poly_t, poly_term_t);
-				}
+				//~ if (0 				< prev_spline_t 				&& 
+					//~ prev_spline_t 	< _prev_spline_term_t_sec_rel 	&& 
+					//~ 0 				< cur_spline_t 					&& 
+					//~ cur_spline_t 	< _spline_term_t_sec_rel 		&& 
+					//~ cur_spline_t 	< SPLINE_TRANS_T_SEC_REL		&&
+					//~ _spline_start_t_sec_abs + SPLINE_TRANS_T_SEC_REL < _prev_spline_start_t_sec_abs + _prev_spline_term_t_sec_rel) {
+//~ 
+					//~ // determine polynomial segment for previous spline
+					//~ std::vector<float>::iterator prev_seg_it;
+					//~ prev_seg_it = std::lower_bound(_prev_spline_cumt_sec.begin(), 
+						//~ _prev_spline_cumt_sec.end(), prev_spline_t);
+					//~ int prev_seg = (int)(prev_seg_it - _prev_spline_cumt_sec.begin());
+//~ 
+					//~ 
+					//~ // determine time in polynomial segment
+					//~ float prev_poly_t = prev_seg == 0 ? prev_spline_t :
+								//~ prev_spline_t - _prev_spline_cumt_sec.at(prev_seg-1);
+					//~ // float prev_poly_term_t = prev_seg == 0 ? 0.0f : _prev_spline_delt_sec.at(cur_seg-1);
+					//~ 
+						//~ 
+					//~ // Calculate smooth transition between trajectories
+					//~ dual_trajectory_transition_nominal_state(cur_spline_t, cur_seg, cur_poly_t, 
+						//~ prev_spline_t, prev_seg, prev_poly_t);
+						//~ 
+						//~ 
+				//~ } else {
+					//~ trajectory_nominal_state(cur_spline_t, _spline_term_t_sec_rel, cur_seg, cur_poly_t, poly_term_t);
+				//~ }
+				
+				trajectory_nominal_state(cur_spline_t, _spline_term_t_sec_rel, cur_seg, cur_poly_t, poly_term_t);
             
             } else {
                 // perform position hold
