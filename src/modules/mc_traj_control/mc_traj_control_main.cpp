@@ -88,7 +88,7 @@
 // Spline initiation (positive value gives a delay for testing safety, 
 // negative values retroactively sets start time to account for MPC iteration time
 //~ #define SPLINE_START_DELAY 5000000
-#define SPLINE_START_DELAY 500000
+#define SPLINE_START_DELAY 1000000
 
 // Transition time for smooth transition between two trajectories
 // NOTE: this should be less than MPC time horizon in planner for proper behavior
