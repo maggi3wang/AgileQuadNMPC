@@ -88,7 +88,8 @@
 // Spline initiation (positive value gives a delay for testing safety, 
 // negative values retroactively sets start time to account for MPC iteration time
 //~ #define SPLINE_START_DELAY 5000000
-#define SPLINE_START_DELAY 1000000
+//#define SPLINE_START_DELAY 1000000
+#define SPLINE_START_DELAY_T_SEC_REL 1.0f
 
 // Transition time for smooth transition between two trajectories
 // NOTE: this should be less than MPC time horizon in planner for proper behavior
@@ -385,6 +386,8 @@ private:
      * Set position setpoint using trajectory control - Ross Allen
      */
     void        trajectory_nominal_state(float cur_spline_t, float spline_term_t, int cur_seg, float cur_poly_t, float poly_term_t);
+    void		trajectory_transition_pos_vel(float t_trans, const std::vector<float>& x_trans_coefs, const std::vector<float>& y_trans_coefs, const std::vector<float>& z_trans_coefs,
+					const std::vector<float>& vx_trans_coefs, const std::vector<float>& vy_trans_coefs, const std::vector<float>& vz_trans_coefs );
     void		dual_trajectory_transition_nominal_state( float cur_spline_t, int cur_seg, float cur_poly_t, 
 					float prev_spline_t, int prev_seg, float prev_poly_t);
     void		trajectory_feedback_controller(float dt);
@@ -401,6 +404,7 @@ private:
     float       poly_eval(const std::vector<float>& coefs, float t);
     void        vector_cum_sum(const std::vector<float>& vec, float initval, std::vector<float>& vecsum);
     void        poly_deriv(const std::vector< std::vector<float> >& poly, std::vector< std::vector<float> >& deriv);
+    void        poly_deriv(const std::vector<float>& poly, std::vector<float>& deriv);
     
 
     /**
@@ -1026,6 +1030,27 @@ std::vector< std::vector<float> >& deriv) {
 }
 
 /* Evaluate derivatives of a polynomial */
+void
+MulticopterTrajectoryControl::poly_deriv(
+const std::vector<float>& poly, std::vector<float>& deriv) {
+
+    
+    typedef std::vector<float>::size_type vecf_sz;
+
+	vecf_sz numcols = poly.size();
+	deriv.resize(numcols);
+	
+	for (vecf_sz col = 0; col != numcols; ++col) {
+		deriv.at(col) = ((float)col)*poly.at(col);
+	}
+	
+	
+	// remove first element
+	deriv.erase(deriv.begin());
+    
+}
+
+/* Evaluate derivatives of a polynomial */
 //~ void
 //~ MulticopterTrajectoryControl::poly_deriv(
 //~ const std::vector<float>& poly, std::vector<float>& deriv, int nSeg, int nCoef)
@@ -1233,6 +1258,53 @@ MulticopterTrajectoryControl::trajectory_nominal_state(
         hold_position();
     }
     
+}
+
+/* transition position and velocity setpoints smoothly */
+void
+MulticopterTrajectoryControl::trajectory_transition_pos_vel(float t_trans,
+	const std::vector<float>& x_trans_coefs, const std::vector<float>& y_trans_coefs, const std::vector<float>& z_trans_coefs,
+	const std::vector<float>& vx_trans_coefs, const std::vector<float>& vy_trans_coefs, const std::vector<float>& vz_trans_coefs )
+{
+	
+	// calculate setpoint in transition
+	_pos_nom(0) = poly_eval(x_trans_coefs, t_trans);
+    _pos_nom(1) = poly_eval(y_trans_coefs, t_trans);
+	_pos_nom(2) = poly_eval(z_trans_coefs, t_trans);
+	_psi_nom = _yaw_coefs.at(0).at(0);
+	
+	_vel_nom(0) = poly_eval(vx_trans_coefs, t_trans);
+	_vel_nom(1) = poly_eval(vy_trans_coefs, t_trans);
+	_vel_nom(2) = poly_eval(vz_trans_coefs, t_trans);
+	_psi1_nom = _yaw1_coefs.at(0).at(0);
+	
+    
+    // set position derivatives to zero
+    _acc_nom.zero();
+    _jerk_nom.zero();
+    _snap_nom.zero();
+    _psi1_nom = 0.0f;
+    _psi2_nom = 0.0f;
+    
+    // Force to just couteract gravity
+    _F_nom.zero();
+    _F_nom(2) = -_mass*GRAV;
+    math::Vector<3> x_nom;	x_nom.zero();
+    math::Vector<3> y_nom;	y_nom.zero();
+    math::Vector<3> z_nom;	z_nom.zero();
+    float uT1_nom = 0.0f;
+    math::Vector<3> h_Omega; 	h_Omega.zero();
+    force_orientation_mapping(_R_N2W, x_nom, y_nom, z_nom,
+                    _uT_nom, uT1_nom, _Omg_nom, h_Omega,
+                    _F_nom, _psi_nom, _psi1_nom); 
+    
+    // zero angular rates
+    _Omg_nom.zero();
+   
+    
+    // nominally no moment
+    _M_nom.zero();
+        
 }
 
 void
@@ -1693,8 +1765,24 @@ MulticopterTrajectoryControl::task_main()
     typedef std::vector<float>::size_type vecf_sz;
     typedef std::vector< std::vector<float> >::size_type vecf2d_sz;
     
-    // time vector
-    //float spline_start_time_sec;
+    /* initialize transition trajectory variables */
+    float transition_interval_sec = fabs(SPLINE_TRANS_T_SEC_REL);
+    float spline_start_delay_sec = fabs(SPLINE_START_DELAY_T_SEC_REL);
+    if (transition_interval_sec > spline_start_delay_sec) {
+		float temp = transition_interval_sec;
+		transition_interval_sec = spline_start_delay_sec;
+		spline_start_delay_sec = temp;
+	}
+	float transition_start_t_sec_abs = 0.0;
+	float t_dt_1 = transition_interval_sec;
+	float t_dt_2 = t_dt_1*t_dt_1;
+	float t_dt_3 = t_dt_2*t_dt_1;
+	std::vector<float> x_trans_coefs (4, 0.0f);
+	std::vector<float> y_trans_coefs (4, 0.0f);
+	std::vector<float> z_trans_coefs (4, 0.0f);
+	std::vector<float> vx_trans_coefs (3, 0.0f);
+	std::vector<float> vy_trans_coefs (3, 0.0f);
+	std::vector<float> vz_trans_coefs (3, 0.0f);
     
     /** TODO: change later with m and J estimators */
     _mass = MASS_TEMP;
@@ -1735,7 +1823,7 @@ MulticopterTrajectoryControl::task_main()
 
 		/* timing variables */
         hrt_abstime t = hrt_absolute_time();
-        float t_sec = ((float)t)*0.000001f;
+        float t_sec = ((float)t)*_MICRO_;
         static uint64_t last_run = 0;
 		float dt = (hrt_absolute_time() - last_run) / 1000000.0f;
 		last_run = hrt_absolute_time();
@@ -1881,7 +1969,7 @@ MulticopterTrajectoryControl::task_main()
                     
                     
                     // Generate cumulative time vector
-                    _spline_start_t_sec_abs = ((float)(t + SPLINE_START_DELAY))*_MICRO_;
+                    _spline_start_t_sec_abs = t_sec + spline_start_delay_sec;
                     vector_cum_sum(_spline_delt_sec, 0.0f, _spline_cumt_sec);
                     _spline_term_t_sec_rel = _spline_cumt_sec.at(_spline_cumt_sec.size()-1);
                     
@@ -1901,58 +1989,107 @@ MulticopterTrajectoryControl::task_main()
                     poly_deriv(_zj_coefs, _zs_coefs);
                     poly_deriv(_yaw_coefs, _yaw1_coefs);
                     poly_deriv(_yaw1_coefs, _yaw2_coefs);
+                    
+                           
+                    // calculate transition polynomial coeffs
+                    transition_start_t_sec_abs = t_sec;
+                    float x_i = _pos(0);
+                    float y_i = _pos(1);
+                    float z_i = _pos(2);
+                    float vx_i = _vel(0);
+                    float vy_i = _vel(1);
+                    float vz_i = _vel(2);
+                    float x_f = _x_coefs.at(0).at(0);
+                    float y_f = _y_coefs.at(0).at(0);
+                    float z_f = _z_coefs.at(0).at(0);
+                    float vx_f = _x_coefs.at(0).at(1);
+                    float vy_f = _y_coefs.at(0).at(1);
+                    float vz_f = _z_coefs.at(0).at(1);
+                    x_trans_coefs.at(0) = x_i;
+                    y_trans_coefs.at(0) = y_i;
+                    z_trans_coefs.at(0) = z_i;
+                    x_trans_coefs.at(1) = vx_i;
+                    y_trans_coefs.at(1) = vy_i;
+                    z_trans_coefs.at(1) = vz_i;
+                    float val1 = x_f - x_i - vx_i*t_dt_1;
+                    float val2 = t_dt_1*(vx_f - vx_i);
+                    x_trans_coefs.at(2) = (3.0f*val1 - val2)/t_dt_2;
+                    x_trans_coefs.at(3) = (-2.0f*val1 + val2)/t_dt_3;
+                    val1 = y_f - y_i - vy_i*t_dt_1;
+                    val2 = t_dt_1*(vy_f - vy_i);
+                    y_trans_coefs.at(2) = (3.0f*val1 - val2)/t_dt_2;
+                    y_trans_coefs.at(3) = (-2.0f*val1 + val2)/t_dt_3;
+                    val1 = z_f - z_i - vz_i*t_dt_1;
+                    val2 = t_dt_1*(vz_f - vz_i);
+                    z_trans_coefs.at(2) = (3.0f*val1 - val2)/t_dt_2;
+                    z_trans_coefs.at(3) = (-2.0f*val1 + val2)/t_dt_3;
+                    poly_deriv(x_trans_coefs, vx_trans_coefs);
+                    poly_deriv(y_trans_coefs, vy_trans_coefs);
+                    poly_deriv(z_trans_coefs, vz_trans_coefs);
+                    
                 }
                 
-                /* Calculate timing parameters */
-				// determine time in spline trajectory
-				float cur_spline_t = t_sec - _spline_start_t_sec_abs;
-				//~ float prev_spline_t = t_sec - _prev_spline_start_t_sec_abs;
-				
-				// determine polynomial segment being evaluated
-				std::vector<float>::iterator seg_it;
-				seg_it = std::lower_bound(_spline_cumt_sec.begin(), 
-					_spline_cumt_sec.end(), cur_spline_t);
-				int cur_seg = (int)(seg_it - _spline_cumt_sec.begin());
-				
-				// determine time in polynomial segment
-				float cur_poly_t = cur_seg == 0 ? cur_spline_t :
-							cur_spline_t - _spline_cumt_sec.at(cur_seg-1);
-				float poly_term_t = cur_seg == 0 ? 0.0f : _spline_delt_sec.at(cur_seg-1);
-                
-                
-                /**
-                 * Calculate nominal states and inputs
-                 */
-				//~ if (0 				< prev_spline_t 				&& 
-					//~ prev_spline_t 	< _prev_spline_term_t_sec_rel 	&& 
-					//~ 0 				< cur_spline_t 					&& 
-					//~ cur_spline_t 	< _spline_term_t_sec_rel 		&& 
-					//~ cur_spline_t 	< SPLINE_TRANS_T_SEC_REL		&&
-					//~ _spline_start_t_sec_abs + SPLINE_TRANS_T_SEC_REL < _prev_spline_start_t_sec_abs + _prev_spline_term_t_sec_rel) {
-//~ 
-					//~ // determine polynomial segment for previous spline
-					//~ std::vector<float>::iterator prev_seg_it;
-					//~ prev_seg_it = std::lower_bound(_prev_spline_cumt_sec.begin(), 
-						//~ _prev_spline_cumt_sec.end(), prev_spline_t);
-					//~ int prev_seg = (int)(prev_seg_it - _prev_spline_cumt_sec.begin());
-//~ 
-					//~ 
-					//~ // determine time in polynomial segment
-					//~ float prev_poly_t = prev_seg == 0 ? prev_spline_t :
-								//~ prev_spline_t - _prev_spline_cumt_sec.at(prev_seg-1);
-					//~ // float prev_poly_term_t = prev_seg == 0 ? 0.0f : _prev_spline_delt_sec.at(cur_seg-1);
-					//~ 
+                float cur_transition_t = t_sec - transition_start_t_sec_abs;
+                if (cur_transition_t < transition_interval_sec && transition_interval_sec > _MICRO_) { 
+					
+					trajectory_transition_pos_vel (cur_transition_t,
+						x_trans_coefs, y_trans_coefs, z_trans_coefs,
+						vx_trans_coefs, vy_trans_coefs, vz_trans_coefs);
+					
+				} else {
+					
+					/* Calculate timing parameters */
+					// determine time in spline trajectory
+					float cur_spline_t = t_sec - _spline_start_t_sec_abs;
+					//~ float prev_spline_t = t_sec - _prev_spline_start_t_sec_abs;
+					
+					// determine polynomial segment being evaluated
+					std::vector<float>::iterator seg_it;
+					seg_it = std::lower_bound(_spline_cumt_sec.begin(), 
+						_spline_cumt_sec.end(), cur_spline_t);
+					int cur_seg = (int)(seg_it - _spline_cumt_sec.begin());
+					
+					// determine time in polynomial segment
+					float cur_poly_t = cur_seg == 0 ? cur_spline_t :
+								cur_spline_t - _spline_cumt_sec.at(cur_seg-1);
+					float poly_term_t = cur_seg == 0 ? 0.0f : _spline_delt_sec.at(cur_seg-1);
+					
+					
+					/**
+					 * Calculate nominal states and inputs
+					 */
+					//~ if (0 				< prev_spline_t 				&& 
+						//~ prev_spline_t 	< _prev_spline_term_t_sec_rel 	&& 
+						//~ 0 				< cur_spline_t 					&& 
+						//~ cur_spline_t 	< _spline_term_t_sec_rel 		&& 
+						//~ cur_spline_t 	< SPLINE_TRANS_T_SEC_REL		&&
+						//~ _spline_start_t_sec_abs + SPLINE_TRANS_T_SEC_REL < _prev_spline_start_t_sec_abs + _prev_spline_term_t_sec_rel) {
+	//~ 
+						//~ // determine polynomial segment for previous spline
+						//~ std::vector<float>::iterator prev_seg_it;
+						//~ prev_seg_it = std::lower_bound(_prev_spline_cumt_sec.begin(), 
+							//~ _prev_spline_cumt_sec.end(), prev_spline_t);
+						//~ int prev_seg = (int)(prev_seg_it - _prev_spline_cumt_sec.begin());
+	//~ 
 						//~ 
-					//~ // Calculate smooth transition between trajectories
-					//~ dual_trajectory_transition_nominal_state(cur_spline_t, cur_seg, cur_poly_t, 
-						//~ prev_spline_t, prev_seg, prev_poly_t);
+						//~ // determine time in polynomial segment
+						//~ float prev_poly_t = prev_seg == 0 ? prev_spline_t :
+									//~ prev_spline_t - _prev_spline_cumt_sec.at(prev_seg-1);
+						//~ // float prev_poly_term_t = prev_seg == 0 ? 0.0f : _prev_spline_delt_sec.at(cur_seg-1);
 						//~ 
-						//~ 
-				//~ } else {
-					//~ trajectory_nominal_state(cur_spline_t, _spline_term_t_sec_rel, cur_seg, cur_poly_t, poly_term_t);
-				//~ }
+							//~ 
+						//~ // Calculate smooth transition between trajectories
+						//~ dual_trajectory_transition_nominal_state(cur_spline_t, cur_seg, cur_poly_t, 
+							//~ prev_spline_t, prev_seg, prev_poly_t);
+							//~ 
+							//~ 
+					//~ } else {
+						//~ trajectory_nominal_state(cur_spline_t, _spline_term_t_sec_rel, cur_seg, cur_poly_t, poly_term_t);
+					//~ }
+					
+					trajectory_nominal_state(cur_spline_t, _spline_term_t_sec_rel, cur_seg, cur_poly_t, poly_term_t);
 				
-				trajectory_nominal_state(cur_spline_t, _spline_term_t_sec_rel, cur_seg, cur_poly_t, poly_term_t);
+				}
             
             } else {
                 // perform position hold
